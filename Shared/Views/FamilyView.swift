@@ -7,9 +7,14 @@ struct FamilyView: View {
     @ObservedObject var me: Member
     @EnvironmentObject private var identity: Identity
     @EnvironmentObject private var box: PersistenceBox
+    @EnvironmentObject private var service: HouseholdService
+    @EnvironmentObject private var sharedDevice: SharedDevice
     @FetchRequest private var members: FetchedResults<Member>
     @State private var showingAdd = false
     @State private var notificationsEnabled = false
+    @State private var editingCode = false
+    @State private var newCode = ""
+    @State private var error: String?
 
     init(household: Household, me: Member) {
         self.household = household
@@ -40,7 +45,11 @@ struct FamilyView: View {
                     LabeledContent("Household", value: household.displayName)
                     if let code = household.parentCode {
                         LabeledContent("Parent code") {
-                            Text(code).font(.body.monospacedDigit()).textSelection(.enabled)
+                            HStack {
+                                Text(code).font(.body.monospacedDigit()).textSelection(.enabled)
+                                Button("Change") { newCode = ""; editingCode = true }
+                                    .buttonStyle(.borderless)
+                            }
                         }
                     }
                     #if !LOCAL_ONLY
@@ -55,6 +64,16 @@ struct FamilyView: View {
                     Text("Household")
                 } footer: {
                     Text("To bring someone in: add them with the + button, then send an invitation. They pick their profile when they join. Share the parent code only with other parents.")
+                }
+            }
+
+            if me.isParent {
+                Section {
+                    Toggle("Shared family device", isOn: Binding(
+                        get: { sharedDevice.isEnabled },
+                        set: { $0 ? sharedDevice.enable(as: me) : (sharedDevice.isEnabled = false) }))
+                } footer: {
+                    Text("For a device the whole family uses, like a kitchen iPad. Everyone taps their own profile to start, parents enter the parent code, and it goes back to the profile list whenever the app is closed.")
                 }
             }
 
@@ -91,10 +110,25 @@ struct FamilyView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { MemberEditorView(household: household, me: me, member: nil) }
+        .alert("New parent code", isPresented: $editingCode) {
+            SecureField("4 to 8 digits", text: $newCode)
+            Button("Save") { saveCode() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Parents use this code to join the household and to open their profile on a shared device.")
+        }
+        .errorAlert($error)
         .task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             notificationsEnabled = settings.authorizationStatus == .authorized
         }
+    }
+}
+
+extension FamilyView {
+    private func saveCode() {
+        do { try service.setParentCode(newCode, for: household, by: me) } catch { self.error = error.localizedDescription }
+        newCode = ""
     }
 }
 

@@ -3,6 +3,8 @@ import CoreData
 
 struct RootView: View {
     @EnvironmentObject private var identity: Identity
+    @EnvironmentObject private var sharedDevice: SharedDevice
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var box: PersistenceBox
     @FetchRequest(sortDescriptors: [NSSortDescriptor(keyPath: \Household.createdAt, ascending: true)])
     private var households: FetchedResults<Household>
@@ -18,6 +20,10 @@ struct RootView: View {
                 description: Text(error.localizedDescription))
         } else {
             content
+                // A shared device goes back to the picker whenever it leaves the screen.
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .background { sharedDevice.signOut() }
+                }
         }
     }
 
@@ -31,8 +37,15 @@ struct RootView: View {
         case .available:
             if let userID = identity.userID {
                 if let household = households.first {
-                    if let me = members.first(where: { $0.household == household && $0.appleUserID == userID }) {
-                        MainView(household: household, me: me)
+                    if let owner = members.first(where: { $0.household == household && $0.appleUserID == userID }) {
+                        if !sharedDevice.isEnabled {
+                            MainView(household: household, me: owner)
+                        } else if let active = sharedDevice.activeMember(in: household) {
+                            MainView(household: household, me: active) { sharedDevice.signOut() }
+                                .id(active.objectID)
+                        } else {
+                            ProfilePickerView(household: household)
+                        }
                     } else {
                         ClaimProfileView(household: household, userID: userID)
                     }

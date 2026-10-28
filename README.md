@@ -1,6 +1,6 @@
 # Happy Mama
 
-Household chore tracker for iPhone (iOS 17+, iPhone 14 and later) and Mac (macOS 14+, Intel and Apple silicon).
+Household chore tracker for iPhone and iPad (iOS 17+, iPhone 14 and later) and Mac (macOS 14+, Intel and Apple silicon).
 Parents assign chores with point values; kids mark them done; points are awarded only when a parent approves.
 
 ## Build

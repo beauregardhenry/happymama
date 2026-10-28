@@ -99,6 +99,18 @@ final class HouseholdService: ObservableObject {
         try save()
     }
 
+    /// Lets parents pick a code they'll remember; it unlocks parent profiles
+    /// when joining and on a shared family device.
+    func setParentCode(_ code: String, for household: Household, by me: Member) throws {
+        try requireParent(me)
+        let code = code.trimmed
+        guard (4...8).contains(code.count), code.allSatisfy({ $0.isASCII && $0.isNumber }) else {
+            throw ServiceError.invalid("Use 4 to 8 digits.")
+        }
+        household.parentCode = code
+        try save()
+    }
+
     /// Links the signed-in iCloud user to an existing profile. Parent profiles
     /// need the household's parent code so a kid can't pick one.
     func claim(_ member: Member, userID: String, parentCode: String?) throws {
