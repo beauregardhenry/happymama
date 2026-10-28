@@ -3,5 +3,5 @@
 # .github/workflows/coverage-ratchet.yml on every push to main; don't bump it from a feature
 # branch (see the header of scripts/check-coverage.sh). Lower one only deliberately, with a reason
 # in the commit. A missing line means that architecture hasn't been measured on main yet.
-arm64=81.25
+arm64=83.46
 x86_64=61.13
