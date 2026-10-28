@@ -99,10 +99,11 @@ struct BalanceCard: View {
             Avatar(member: member, size: 52)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Hi, \(member.displayName)!").font(.title3.bold())
-                Text("\(member.balance) points").font(.subheadline).foregroundStyle(.secondary)
+                Text(member.reserved > 0 ? "\(member.available) points · \(member.reserved) on hold" : "\(member.available) points")
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer()
-            Text("\(member.balance)")
+            Text("\(member.available)")
                 .font(.system(size: 34, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.accent)
                 .contentTransition(.numericText())

@@ -269,3 +269,18 @@ final class RecurrenceTests: XCTestCase {
         XCTAssertNil(RecurrenceRule(kind: .none).nextDate(after: Date(), calendar: calendar))
     }
 }
+
+@MainActor
+final class DemoDataTests: XCTestCase {
+    func testDemoHouseholdCoversEveryChoreState() throws {
+        let service = HouseholdService(persistence: PersistenceController(mode: .inMemory))
+        let household = try service.loadDemoHousehold(userID: "u-demo")
+
+        XCTAssertEqual(household.parents.count, 2)
+        XCTAssertEqual(household.kids.count, 3)
+        let statuses = Set(((household.chores as? Set<Chore>) ?? []).map(\.status))
+        XCTAssertTrue(statuses.isSuperset(of: [.todo, .pendingReview, .approved]))
+        XCTAssertEqual(household.kids.first { $0.displayName == "Ava" }?.balance, 4)
+        XCTAssertEqual(((household.rewards as? Set<Reward>) ?? []).count, 3)
+    }
+}

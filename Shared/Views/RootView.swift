@@ -118,6 +118,11 @@ struct WelcomeView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(householdName.trimmed.isEmpty || yourName.trimmed.isEmpty)
                 }
+                #if LOCAL_ONLY
+                Section("Testing") {
+                    Button("Load demo family") { loadDemo() }
+                }
+                #endif
                 Section("Joining a household?") {
                     Text("Open the invitation you were sent on this device. Your household appears here once it syncs.")
                         .foregroundStyle(.secondary)
@@ -136,6 +141,12 @@ struct WelcomeView: View {
             self.error = error.localizedDescription
         }
     }
+
+    #if LOCAL_ONLY
+    private func loadDemo() {
+        do { try service.loadDemoHousehold(userID: userID) } catch { self.error = error.localizedDescription }
+    }
+    #endif
 }
 
 /// Shown after joining a shared household: pick which profile is you.
