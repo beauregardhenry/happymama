@@ -38,6 +38,7 @@ enum HappyMamaModel {
             attr("reviewedByName", .stringAttributeType),
             attr("reviewNote", .stringAttributeType),
             attr("awardedPoints", .integer32AttributeType, 0),
+            attr("sourceChoreID", .UUIDAttributeType),
         ])
         let reward = entity(Reward.self, [
             attr("id", .UUIDAttributeType),
@@ -64,6 +65,7 @@ enum HappyMamaModel {
             attr("kindRaw", .stringAttributeType, "chore"),
             attr("date", .dateAttributeType),
             attr("choreID", .UUIDAttributeType),
+            attr("redemptionID", .UUIDAttributeType),
         ])
 
         // Household owns everything; deleting it (or a member) cascades.

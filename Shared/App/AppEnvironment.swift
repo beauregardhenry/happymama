@@ -41,6 +41,8 @@ final class AppEnvironment {
         request.fetchLimit = 1
         guard let household = (try? persistence.viewContext.fetch(request))?.first as? Household,
               let me = household.memberList.first(where: { $0.appleUserID == userID }) else { return }
+        // Tidy up anything two devices both created while offline before notifying about it.
+        try? service.resolveSyncDuplicates(in: household)
         notifier.sync(household: household, me: me)
     }
 }

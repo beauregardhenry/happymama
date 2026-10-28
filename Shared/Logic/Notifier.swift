@@ -124,27 +124,41 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    struct Reminder: Equatable {
+        let id: String
+        let title: String
+        let body: String
+        let fireAt: DateComponents
+    }
+
+    /// A 9am reminder on the due date for each of this kid's open chores, skipping
+    /// any whose reminder time has already passed. Parents get none.
+    static func dueReminders(household: Household, me: Member, now: Date = Date(),
+                             calendar: Calendar = .current) -> [Reminder] {
+        guard !me.isParent else { return [] }
+        let chores = ((household.chores as? Set<Chore>) ?? []).filter {
+            $0.assignee?.id == me.id && $0.status == .todo
+        }
+        return chores.compactMap { chore in
+            guard let due = chore.dueDate, let id = chore.id else { return nil }
+            var parts = calendar.dateComponents([.year, .month, .day], from: due)
+            parts.hour = 9
+            guard let fireDate = calendar.date(from: parts), fireDate > now else { return nil }
+            return Reminder(id: "due-\(id.uuidString)", title: "Due today: \(chore.displayTitle)",
+                            body: "Worth \(chore.points) points.", fireAt: parts)
+        }
+    }
+
     private func scheduleDueReminders(household: Household, me: Member) async {
         let existing = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("due-") }
         center.removePendingNotificationRequests(withIdentifiers: existing)
-        guard !me.isParent else { return }
-
-        let calendar = Calendar.current
-        let chores = ((household.chores as? Set<Chore>) ?? []).filter {
-            $0.assignee?.id == me.id && $0.status == .todo && $0.dueDate != nil
-        }
-        for chore in chores {
-            guard let due = chore.dueDate else { continue }
-            var parts = calendar.dateComponents([.year, .month, .day], from: due)
-            parts.hour = 9
-            guard let fireDate = calendar.date(from: parts), fireDate > Date() else { continue }
+        for reminder in Notifier.dueReminders(household: household, me: me) {
             let content = UNMutableNotificationContent()
-            content.title = "Due today: \(chore.displayTitle)"
-            content.body = "Worth \(chore.points) points."
+            content.title = reminder.title
+            content.body = reminder.body
             content.sound = .default
-            let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
-            try? await center.add(UNNotificationRequest(
-                identifier: "due-\(chore.id?.uuidString ?? UUID().uuidString)", content: content, trigger: trigger))
+            let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireAt, repeats: false)
+            try? await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
         }
     }
 }
