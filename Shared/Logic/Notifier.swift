@@ -27,7 +27,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .sound]
     }
 
-    private struct Event {
+    struct Event: Equatable {
         let key: String
         let title: String
         let body: String
@@ -42,7 +42,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    private func events(household: Household, me: Member) -> [Event] {
+    func events(household: Household, me: Member) -> [Event] {
         let chores = (household.chores as? Set<Chore>) ?? []
         let redemptions = (household.redemptions as? Set<Redemption>) ?? []
         var result: [Event] = []
@@ -95,21 +95,23 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         return result
     }
 
+    /// The first sync just records what already exists so installing doesn't flood the user.
+    static func eventsToDeliver(current: [Event], seen: Set<String>, isFirstRun: Bool) -> [Event] {
+        isFirstRun ? [] : current.filter { !seen.contains($0.key) }
+    }
+
     private func deliverNewEvents(household: Household, me: Member) {
         let seenKey = "notified.\(me.id?.uuidString ?? "")"
         var seen = Set(defaults.stringArray(forKey: seenKey) ?? [])
         let current = events(household: household, me: me)
         let isFirstRun = defaults.stringArray(forKey: seenKey) == nil
 
-        // The first sync just records what already exists so installing doesn't flood the user.
-        if !isFirstRun {
-            for event in current where !seen.contains(event.key) {
-                let content = UNMutableNotificationContent()
-                content.title = event.title
-                content.body = event.body
-                content.sound = .default
-                center.add(UNNotificationRequest(identifier: event.key, content: content, trigger: nil))
-            }
+        for event in Notifier.eventsToDeliver(current: current, seen: seen, isFirstRun: isFirstRun) {
+            let content = UNMutableNotificationContent()
+            content.title = event.title
+            content.body = event.body
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: event.key, content: content, trigger: nil))
         }
         seen.formUnion(current.map(\.key))
         defaults.set(Array(seen), forKey: seenKey)
