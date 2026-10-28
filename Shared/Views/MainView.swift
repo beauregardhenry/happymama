@@ -1,0 +1,106 @@
+import SwiftUI
+import CoreData
+
+enum AppSection: String, Identifiable, Hashable {
+    case chores, review, rewards, family
+    var id: String { rawValue }
+
+    func title(isParent: Bool) -> String {
+        switch self {
+        case .chores: isParent ? "Chores" : "My Chores"
+        case .review: "Review"
+        case .rewards: "Rewards"
+        case .family: "Family"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .chores: "checklist"
+        case .review: "checkmark.seal"
+        case .rewards: "gift"
+        case .family: "person.2"
+        }
+    }
+}
+
+struct MainView: View {
+    let household: Household
+    @ObservedObject var me: Member
+    @State private var selection: AppSection? = .chores
+    @FetchRequest private var pendingChores: FetchedResults<Chore>
+    @FetchRequest private var pendingRedemptions: FetchedResults<Redemption>
+
+    init(household: Household, me: Member) {
+        self.household = household
+        self.me = me
+        _pendingChores = FetchRequest(
+            sortDescriptors: [],
+            predicate: NSPredicate(format: "household == %@ AND statusRaw == %@", household, ChoreStatus.pendingReview.rawValue))
+        _pendingRedemptions = FetchRequest(
+            sortDescriptors: [],
+            predicate: NSPredicate(format: "household == %@ AND statusRaw == %@", household, RedemptionStatus.requested.rawValue))
+    }
+
+    private var sections: [AppSection] {
+        me.isParent ? [.chores, .review, .rewards, .family] : [.chores, .rewards, .family]
+    }
+    private var reviewCount: Int { pendingChores.count + pendingRedemptions.count }
+
+    var body: some View {
+        platformBody
+            .task { AppEnvironment.shared.syncNotifications() }
+            .onChange(of: me.role) { _, _ in
+                if !sections.contains(selection ?? .chores) { selection = .chores }
+            }
+    }
+
+    @ViewBuilder
+    private func content(_ section: AppSection) -> some View {
+        switch section {
+        case .chores: ChoresView(household: household, me: me)
+        case .review: ReviewView(household: household, me: me)
+        case .rewards: RewardsView(household: household, me: me)
+        case .family: FamilyView(household: household, me: me)
+        }
+    }
+
+    #if os(iOS)
+    private var platformBody: some View {
+        TabView(selection: Binding(get: { selection ?? .chores }, set: { selection = $0 })) {
+            ForEach(sections) { section in
+                NavigationStack { content(section) }
+                    .tabItem { Label(section.title(isParent: me.isParent), systemImage: section.icon) }
+                    .badge(section == .review ? reviewCount : 0)
+                    .tag(section)
+            }
+        }
+    }
+    #else
+    private var platformBody: some View {
+        NavigationSplitView {
+            List(sections, selection: $selection) { section in
+                Label(section.title(isParent: me.isParent), systemImage: section.icon)
+                    .badge(section == .review ? reviewCount : 0)
+                    .tag(section)
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+            .safeAreaInset(edge: .top) {
+                HStack(spacing: 8) {
+                    Avatar(member: me, size: 32)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(me.displayName).font(.headline)
+                        Text(household.displayName).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+        } detail: {
+            NavigationStack { content(selection ?? .chores) }
+                .id(selection)
+        }
+    }
+    #endif
+}
