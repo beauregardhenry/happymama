@@ -27,13 +27,19 @@ enum AppSection: String, Identifiable, Hashable {
 struct MainView: View {
     let household: Household
     @ObservedObject var me: Member
+    /// Set on a shared family device: hands the device to someone else.
+    var onSwitchUser: (() -> Void)?
     @State private var selection: AppSection? = .chores
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @FetchRequest private var pendingChores: FetchedResults<Chore>
     @FetchRequest private var pendingRedemptions: FetchedResults<Redemption>
 
-    init(household: Household, me: Member) {
+    init(household: Household, me: Member, onSwitchUser: (() -> Void)? = nil) {
         self.household = household
         self.me = me
+        self.onSwitchUser = onSwitchUser
         _pendingChores = FetchRequest(
             sortDescriptors: [],
             predicate: NSPredicate(format: "household == %@ AND statusRaw == %@", household, ChoreStatus.pendingReview.rawValue))
@@ -48,7 +54,7 @@ struct MainView: View {
     private var reviewCount: Int { pendingChores.count + pendingRedemptions.count }
 
     var body: some View {
-        platformBody
+        layout
             .task { AppEnvironment.shared.syncNotifications() }
             .onChange(of: me.role) { _, _ in
                 if !sections.contains(selection ?? .chores) { selection = .chores }
@@ -65,19 +71,46 @@ struct MainView: View {
         }
     }
 
+    @ViewBuilder
+    private var layout: some View {
+        #if os(iOS)
+        if sizeClass == .regular { sidebarLayout } else { tabLayout }
+        #else
+        sidebarLayout
+        #endif
+    }
+
+    @ViewBuilder
+    private var switchUserButton: some View {
+        if let onSwitchUser {
+            Button(action: onSwitchUser) {
+                Label("Switch", systemImage: "person.2.circle")
+            }
+            .accessibilityLabel("Switch person")
+        }
+    }
+
     #if os(iOS)
-    private var platformBody: some View {
+    private var tabLayout: some View {
         TabView(selection: Binding(get: { selection ?? .chores }, set: { selection = $0 })) {
             ForEach(sections) { section in
-                NavigationStack { content(section) }
-                    .tabItem { Label(section.title(isParent: me.isParent), systemImage: section.icon) }
-                    .badge(section == .review ? reviewCount : 0)
-                    .tag(section)
+                NavigationStack {
+                    content(section)
+                        .toolbar {
+                            if onSwitchUser != nil {
+                                ToolbarItem(placement: .topBarLeading) { switchUserButton }
+                            }
+                        }
+                }
+                .tabItem { Label(section.title(isParent: me.isParent), systemImage: section.icon) }
+                .badge(section == .review ? reviewCount : 0)
+                .tag(section)
             }
         }
     }
-    #else
-    private var platformBody: some View {
+    #endif
+
+    private var sidebarLayout: some View {
         NavigationSplitView {
             List(sections, selection: $selection) { section in
                 Label(section.title(isParent: me.isParent), systemImage: section.icon)
@@ -93,6 +126,9 @@ struct MainView: View {
                         Text(household.displayName).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    switchUserButton
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -102,5 +138,4 @@ struct MainView: View {
                 .id(selection)
         }
     }
-    #endif
 }
