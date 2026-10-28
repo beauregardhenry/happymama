@@ -21,6 +21,8 @@ final class PersistenceController {
     let container: NSPersistentContainer
     private(set) var privateStore: NSPersistentStore?
     private(set) var sharedStore: NSPersistentStore?
+    /// Set when the on-disk stores couldn't be opened; the UI shows it instead of crashing.
+    private(set) var loadError: Error?
     private let log = Logger(subsystem: "com.happymama", category: "persistence")
 
     var viewContext: NSManagedObjectContext { container.viewContext }
@@ -64,12 +66,14 @@ final class PersistenceController {
             container.persistentStoreDescriptions = [d]
         }
 
+        var failure: Error?
         container.loadPersistentStores { [log] _, error in
             if let error {
                 log.error("Failed to load store: \(error.localizedDescription)")
-                fatalError("Unable to load persistent stores: \(error)")
+                failure = error
             }
         }
+        loadError = failure
 
         let stores = container.persistentStoreCoordinator.persistentStores
         privateStore = stores.first

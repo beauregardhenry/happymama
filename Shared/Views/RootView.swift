@@ -3,6 +3,7 @@ import CoreData
 
 struct RootView: View {
     @EnvironmentObject private var identity: Identity
+    @EnvironmentObject private var box: PersistenceBox
     @FetchRequest(sortDescriptors: [NSSortDescriptor(keyPath: \Household.createdAt, ascending: true)])
     private var households: FetchedResults<Household>
     // Observed so the view refreshes when someone claims a profile.
@@ -10,6 +11,18 @@ struct RootView: View {
     private var members: FetchedResults<Member>
 
     var body: some View {
+        if let error = box.persistence.loadError {
+            ContentUnavailableView(
+                "Couldn't open your data",
+                systemImage: "exclamationmark.triangle",
+                description: Text(error.localizedDescription))
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch identity.status {
         case .checking:
             ProgressView("Checking iCloud…")

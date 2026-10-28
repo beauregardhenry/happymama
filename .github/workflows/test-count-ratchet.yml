@@ -1,0 +1,60 @@
+name: Test count ratchet
+
+# Raises test-count-baseline.txt on main after the test count climbs, instead of relying on each PR to
+# bump the file itself. Two PRs open at once would both edit the same line and conflict (or
+# silently clobber one another's real number); this keeps the file out of feature branches
+# entirely and lets exactly one place -- post-merge, on main -- own writing to it.
+#
+# Pushing to main needs the repository's RATCHET_DEPLOY_KEY secret: the private half of a
+# write-enabled deploy key. The "main" ruleset requires pull requests and status checks, and a
+# deploy key is the one actor it lets bypass them. Without the secret this job still measures and
+# reports, but its push to main is rejected.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-count-ratchet-main
+  cancel-in-progress: false
+
+jobs:
+  ratchet:
+    name: Ratchet the test count baseline
+    runs-on: macos-15
+    timeout-minutes: 10
+    if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          # The ruleset on main requires pull requests, so the default token's push is rejected.
+          # Its only bypass is a deploy key, so push over SSH with one (see the header above).
+          # Unset, checkout falls back to the read-only token: the job measures but cannot push.
+          ssh-key: ${{ secrets.RATCHET_DEPLOY_KEY }}
+      - name: Measure the test count and raise the baseline if it climbed
+        run: ./scripts/check-test-count.sh --update-if-higher
+      - name: Commit and push the baseline if it changed
+        run: |
+          if git diff --quiet -- test-count-baseline.txt; then
+            echo "No test count increase to record."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add test-count-baseline.txt
+          git commit -m "chore: ratchet test count baseline [skip ratchet] [skip ci]" -m "$(git diff --cached -- test-count-baseline.txt)"
+          # The other ratchet workflow runs on the same push, as may another merge. The two
+          # baseline files never overlap, so rebasing this one-line commit onto the new main and
+          # retrying is safe; a genuine conflict still fails the job loudly.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            echo "main moved since checkout (attempt ${attempt}); rebasing onto it and retrying."
+            git pull --rebase origin main
+          done
+          echo "Could not push the raised baseline after 3 attempts." >&2
+          exit 1

@@ -35,13 +35,13 @@ final class HouseholdService: ObservableObject {
         guard !name.isEmpty else { throw ServiceError.invalid("Give your household a name.") }
         guard !yourName.isEmpty else { throw ServiceError.invalid("Enter your name.") }
 
-        let household = make(Household.self)
+        let household = try make(Household.self)
         household.id = UUID()
         household.name = name
         household.createdAt = Date()
         household.parentCode = String(format: "%06d", Int.random(in: 0...999_999))
 
-        let me = insert(Member.self, into: household)
+        let me = try insert(Member.self, into: household)
         me.id = UUID()
         me.name = yourName
         me.role = .parent
@@ -59,7 +59,7 @@ final class HouseholdService: ObservableObject {
         try requireParent(me)
         let name = name.trimmed
         guard !name.isEmpty else { throw ServiceError.invalid("Enter a name.") }
-        let member = insert(Member.self, into: household)
+        let member = try insert(Member.self, into: household)
         member.id = UUID()
         member.name = name
         member.role = role
@@ -123,7 +123,7 @@ final class HouseholdService: ObservableObject {
     func joinAsKid(name: String, emoji: String, userID: String, household: Household) throws -> Member {
         let name = name.trimmed
         guard !name.isEmpty else { throw ServiceError.invalid("Enter your name.") }
-        let member = insert(Member.self, into: household)
+        let member = try insert(Member.self, into: household)
         member.id = UUID()
         member.name = name
         member.role = .kid
@@ -156,8 +156,8 @@ final class HouseholdService: ObservableObject {
         if draft.recurrence.isRepeating, draft.dueDate == nil {
             throw ServiceError.invalid("Repeating chores need a due date to start from.")
         }
-        let created = assignees.map { kid in
-            newChore(from: draft, title: title, assignee: kid, household: household)
+        let created = try assignees.map { kid in
+            try newChore(from: draft, title: title, assignee: kid, household: household)
         }
         try save()
         return created
@@ -229,7 +229,7 @@ final class HouseholdService: ObservableObject {
         chore.reviewedByName = me.name
         chore.reviewNote = nil
 
-        let entry = insert(PointEntry.self, into: household)
+        let entry = try insert(PointEntry.self, into: household)
         entry.id = UUID()
         entry.amount = Int32(awarded)
         entry.reason = chore.displayTitle
@@ -239,7 +239,7 @@ final class HouseholdService: ObservableObject {
         entry.member = kid
         entry.household = household
 
-        scheduleNextOccurrence(after: chore)
+        try scheduleNextOccurrence(after: chore)
         try save()
     }
 
@@ -257,8 +257,8 @@ final class HouseholdService: ObservableObject {
         try save()
     }
 
-    private func newChore(from draft: ChoreDraft, title: String, assignee: Member, household: Household) -> Chore {
-        let chore = insert(Chore.self, into: household)
+    private func newChore(from draft: ChoreDraft, title: String, assignee: Member, household: Household) throws -> Chore {
+        let chore = try insert(Chore.self, into: household)
         chore.id = UUID()
         chore.title = title
         chore.notes = draft.notes.trimmed
@@ -273,7 +273,7 @@ final class HouseholdService: ObservableObject {
     }
 
     /// Repeating chores get their next copy once the current one is approved.
-    private func scheduleNextOccurrence(after chore: Chore) {
+    private func scheduleNextOccurrence(after chore: Chore) throws {
         let rule = chore.recurrence
         guard rule.isRepeating, let household = chore.household, let kid = chore.assignee else { return }
         // Late chores repeat from today, not from the missed date.
@@ -284,7 +284,7 @@ final class HouseholdService: ObservableObject {
         draft.points = Int(chore.points)
         draft.dueDate = next
         draft.recurrence = rule
-        _ = newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
+        _ = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
     }
 
     // MARK: Rewards
@@ -296,7 +296,7 @@ final class HouseholdService: ObservableObject {
         let title = title.trimmed
         guard !title.isEmpty else { throw ServiceError.invalid("Give the reward a name.") }
         guard cost > 0 else { throw ServiceError.invalid("A reward needs to cost at least 1 point.") }
-        let target = reward ?? insert(Reward.self, into: household)
+        let target = try reward ?? insert(Reward.self, into: household)
         if reward == nil {
             target.id = UUID()
             target.createdAt = Date()
@@ -322,7 +322,7 @@ final class HouseholdService: ObservableObject {
         guard me.available >= Int(reward.cost) else {
             throw ServiceError.invalid("You need \(Int(reward.cost) - me.available) more points for that.")
         }
-        let request = insert(Redemption.self, into: household)
+        let request = try insert(Redemption.self, into: household)
         request.id = UUID()
         request.rewardTitle = reward.title
         request.rewardEmoji = reward.emoji
@@ -344,7 +344,7 @@ final class HouseholdService: ObservableObject {
             guard kid.balance >= Int(redemption.cost) else {
                 throw ServiceError.invalid("\(kid.displayName) doesn't have enough points anymore.")
             }
-            let entry = insert(PointEntry.self, into: household)
+            let entry = try insert(PointEntry.self, into: household)
             entry.id = UUID()
             entry.amount = -redemption.cost
             entry.reason = redemption.displayTitle
@@ -365,14 +365,18 @@ final class HouseholdService: ObservableObject {
         guard me.isParent else { throw ServiceError.notAllowed("Only parents can do that.") }
     }
 
-    private func make<T: NSManagedObject>(_ type: T.Type) -> T {
-        NSEntityDescription.insertNewObject(forEntityName: String(describing: type), into: context) as! T
+    private func make<T: NSManagedObject>(_ type: T.Type) throws -> T {
+        let name = String(describing: type)
+        guard let object = NSEntityDescription.insertNewObject(forEntityName: name, into: context) as? T else {
+            throw ServiceError.invalid("Couldn't create a \(name). Please try again.")
+        }
+        return object
     }
 
     /// New objects must land in the same store as their household, otherwise
     /// something created by an invited person would stay out of the shared database.
-    private func insert<T: NSManagedObject>(_ type: T.Type, into household: Household) -> T {
-        let object = make(type)
+    private func insert<T: NSManagedObject>(_ type: T.Type, into household: Household) throws -> T {
+        let object = try make(type)
         if let store = household.objectID.persistentStore {
             context.assign(object, to: store)
         }
