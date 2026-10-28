@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS tests and universal build
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - name: Show toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Install XcodeGen and generate the project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Check for banned patterns
+        run: ./scripts/check-banned-patterns.sh
+      - name: Check the test count ratchet
+        run: ./scripts/check-test-count.sh
+      - name: Run the unit tests and check the coverage ratchet
+        run: ./scripts/check-coverage.sh
+      - name: Build the iCloud (Debug) configuration
+        run: >-
+          xcodebuild -project HappyMama.xcodeproj -scheme HappyMama-macOS
+          -configuration Debug -destination 'platform=macOS'
+          -derivedDataPath build/debug CODE_SIGNING_ALLOWED=NO build
+      - name: Build the universal Release app
+        run: >-
+          xcodebuild -project HappyMama.xcodeproj -scheme HappyMama-macOS
+          -configuration Release -destination 'generic/platform=macOS'
+          -derivedDataPath build/release CODE_SIGNING_ALLOWED=NO build
+      - name: Verify it runs on Intel and Apple silicon
+        run: ./scripts/verify-macos-universal.sh build/release/Build/Products/Release/HappyMama.app
+
+  ios:
+    name: iOS build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install XcodeGen and generate the project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build the iCloud (Debug) configuration
+        run: >-
+          xcodebuild -project HappyMama.xcodeproj -scheme HappyMama-iOS
+          -configuration Debug -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/debug CODE_SIGNING_ALLOWED=NO build
+      - name: Build the Local (no iCloud) configuration
+        run: >-
+          xcodebuild -project HappyMama.xcodeproj -scheme HappyMama-iOS-Local
+          -configuration Local -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath build/local CODE_SIGNING_ALLOWED=NO build
