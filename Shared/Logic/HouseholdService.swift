@@ -59,15 +59,8 @@ final class HouseholdService: ObservableObject {
         try requireParent(me)
         let name = name.trimmed
         guard !name.isEmpty else { throw ServiceError.invalid("Enter a name.") }
-        let member = try insert(Member.self, into: household)
-        member.id = UUID()
-        member.name = name
-        member.role = role
-        member.emoji = emoji
-        member.colorIndex = Int16(household.memberList.count % Theme.palette.count)
-        member.createdAt = Date()
-        member.household = household
-        if autoClaimNewMembers { member.appleUserID = "local-" + UUID().uuidString }
+        let userID = autoClaimNewMembers ? "local-" + UUID().uuidString : nil
+        let member = try newMember(name: name, role: role, emoji: emoji, userID: userID, household: household)
         try save()
         return member
     }
@@ -123,16 +116,21 @@ final class HouseholdService: ObservableObject {
     func joinAsKid(name: String, emoji: String, userID: String, household: Household) throws -> Member {
         let name = name.trimmed
         guard !name.isEmpty else { throw ServiceError.invalid("Enter your name.") }
+        let member = try newMember(name: name, role: .kid, emoji: emoji, userID: userID, household: household)
+        try save()
+        return member
+    }
+
+    private func newMember(name: String, role: Role, emoji: String, userID: String?, household: Household) throws -> Member {
         let member = try insert(Member.self, into: household)
         member.id = UUID()
         member.name = name
-        member.role = .kid
+        member.role = role
         member.emoji = emoji
         member.colorIndex = Int16(household.memberList.count % Theme.palette.count)
         member.appleUserID = userID
         member.createdAt = Date()
         member.household = household
-        try save()
         return member
     }
 
@@ -149,13 +147,8 @@ final class HouseholdService: ObservableObject {
     @discardableResult
     func createChores(_ draft: ChoreDraft, assignees: [Member], in household: Household, by me: Member) throws -> [Chore] {
         try requireParent(me)
-        let title = draft.title.trimmed
-        guard !title.isEmpty else { throw ServiceError.invalid("Give the chore a title.") }
         guard !assignees.isEmpty else { throw ServiceError.invalid("Choose who should do it.") }
-        guard assignees.allSatisfy({ !$0.isParent }) else { throw ServiceError.invalid("Chores can only be assigned to kids.") }
-        if draft.recurrence.isRepeating, draft.dueDate == nil {
-            throw ServiceError.invalid("Repeating chores need a due date to start from.")
-        }
+        let title = try validated(draft, assignees: assignees)
         let created = try assignees.map { kid in
             try newChore(from: draft, title: title, assignee: kid, household: household)
         }
@@ -166,12 +159,7 @@ final class HouseholdService: ObservableObject {
     func updateChore(_ chore: Chore, with draft: ChoreDraft, assignee: Member, by me: Member) throws {
         try requireParent(me)
         guard chore.status == .todo else { throw ServiceError.invalid("Only chores that haven't been turned in can be edited.") }
-        let title = draft.title.trimmed
-        guard !title.isEmpty else { throw ServiceError.invalid("Give the chore a title.") }
-        guard !assignee.isParent else { throw ServiceError.invalid("Chores can only be assigned to kids.") }
-        if draft.recurrence.isRepeating, draft.dueDate == nil {
-            throw ServiceError.invalid("Repeating chores need a due date to start from.")
-        }
+        let title = try validated(draft, assignees: [assignee])
         chore.title = title
         chore.notes = draft.notes.trimmed
         chore.points = Int32(max(0, draft.points))
@@ -229,15 +217,8 @@ final class HouseholdService: ObservableObject {
         chore.reviewedByName = me.name
         chore.reviewNote = nil
 
-        let entry = try insert(PointEntry.self, into: household)
-        entry.id = UUID()
-        entry.amount = Int32(awarded)
-        entry.reason = chore.displayTitle
-        entry.kind = .chore
-        entry.date = Date()
+        let entry = try addEntry(Int32(awarded), kind: .chore, reason: chore.displayTitle, to: kid, in: household)
         entry.choreID = chore.id
-        entry.member = kid
-        entry.household = household
 
         try scheduleNextOccurrence(after: chore)
         try save()
@@ -255,6 +236,17 @@ final class HouseholdService: ObservableObject {
         chore.completionNote = nil
         chore.photo = nil
         try save()
+    }
+
+    /// Returns the trimmed title once the draft passes the rules shared by creating and editing.
+    private func validated(_ draft: ChoreDraft, assignees: [Member]) throws -> String {
+        let title = draft.title.trimmed
+        guard !title.isEmpty else { throw ServiceError.invalid("Give the chore a title.") }
+        guard assignees.allSatisfy({ !$0.isParent }) else { throw ServiceError.invalid("Chores can only be assigned to kids.") }
+        if draft.recurrence.isRepeating, draft.dueDate == nil {
+            throw ServiceError.invalid("Repeating chores need a due date to start from.")
+        }
+        return title
     }
 
     private func newChore(from draft: ChoreDraft, title: String, assignee: Member, household: Household) throws -> Chore {
@@ -284,7 +276,35 @@ final class HouseholdService: ObservableObject {
         draft.points = Int(chore.points)
         draft.dueDate = next
         draft.recurrence = rule
-        _ = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
+        let copy = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
+        copy.sourceChoreID = chore.id
+    }
+
+    // MARK: Sync duplicates
+
+    /// Two parents can approve the same chore or reward request on different devices
+    /// before either syncs. Each device then records its own point entry and, for a
+    /// repeating chore, its own next copy. Balances already count one entry per source;
+    /// this deletes the extras so every device ends up with the same records.
+    /// The keeper is chosen the same way on every device, so the deletions never collide.
+    func resolveSyncDuplicates(in household: Household) throws {
+        let entries = (household.entries as? Set<PointEntry>) ?? []
+        let keptEntries = Set(PointEntry.unique(entries).map(\.objectID))
+        for entry in entries where !keptEntries.contains(entry.objectID) {
+            context.delete(entry)
+        }
+
+        let copies = ((household.chores as? Set<Chore>) ?? []).filter { $0.sourceChoreID != nil }
+        for group in Dictionary(grouping: copies, by: \.sourceChoreID).values where group.count > 1 {
+            // Keep the copy the kid has made the most progress on.
+            let keeper = group.max { a, b in
+                a.status.progress != b.status.progress ? a.status.progress < b.status.progress : syncOrder(b, a)
+            }
+            for chore in group where chore !== keeper {
+                context.delete(chore)
+            }
+        }
+        try save()
     }
 
     // MARK: Rewards
@@ -344,14 +364,8 @@ final class HouseholdService: ObservableObject {
             guard kid.balance >= Int(redemption.cost) else {
                 throw ServiceError.invalid("\(kid.displayName) doesn't have enough points anymore.")
             }
-            let entry = try insert(PointEntry.self, into: household)
-            entry.id = UUID()
-            entry.amount = -redemption.cost
-            entry.reason = redemption.displayTitle
-            entry.kind = .redemption
-            entry.date = Date()
-            entry.member = kid
-            entry.household = household
+            let entry = try addEntry(-redemption.cost, kind: .redemption, reason: redemption.displayTitle, to: kid, in: household)
+            entry.redemptionID = redemption.id
         }
         redemption.status = approve ? .approved : .denied
         redemption.decidedAt = Date()
@@ -360,6 +374,19 @@ final class HouseholdService: ObservableObject {
     }
 
     // MARK: Helpers
+
+    private func addEntry(_ amount: Int32, kind: EntryKind, reason: String, to kid: Member,
+                          in household: Household) throws -> PointEntry {
+        let entry = try insert(PointEntry.self, into: household)
+        entry.id = UUID()
+        entry.amount = amount
+        entry.reason = reason
+        entry.kind = kind
+        entry.date = Date()
+        entry.member = kid
+        entry.household = household
+        return entry
+    }
 
     private func requireParent(_ me: Member) throws {
         guard me.isParent else { throw ServiceError.notAllowed("Only parents can do that.") }

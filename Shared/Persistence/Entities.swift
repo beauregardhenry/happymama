@@ -8,6 +8,15 @@ enum Role: String, CaseIterable, Identifiable {
 
 enum ChoreStatus: String {
     case todo, pendingReview, approved
+
+    /// How far along the chore is, for picking between duplicates.
+    var progress: Int {
+        switch self {
+        case .todo: 0
+        case .pendingReview: 1
+        case .approved: 2
+        }
+    }
 }
 
 enum RedemptionStatus: String {
@@ -64,8 +73,11 @@ final class Member: NSManagedObject, Identifiable {
     var displayEmoji: String { emoji ?? (isParent ? "🌻" : "🦊") }
     var isClaimed: Bool { appleUserID != nil }
 
+    /// Newest first. Two parents acting on the same chore or request from different
+    /// devices can each record an entry before they sync, so only one per source counts.
     var entryList: [PointEntry] {
-        ((entries as? Set<PointEntry>) ?? []).sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+        PointEntry.unique((entries as? Set<PointEntry>) ?? [])
+            .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
     }
     /// Points earned minus points spent.
     var balance: Int { entryList.reduce(0) { $0 + Int($1.amount) } }
@@ -96,6 +108,8 @@ final class Chore: NSManagedObject, Identifiable {
     @NSManaged var reviewedByName: String?
     @NSManaged var reviewNote: String?
     @NSManaged var awardedPoints: Int32
+    /// For a repeating chore's next copy: the chore whose approval created it.
+    @NSManaged var sourceChoreID: UUID?
     @NSManaged var household: Household?
     @NSManaged var assignee: Member?
 
@@ -108,9 +122,10 @@ final class Chore: NSManagedObject, Identifiable {
         get { RecurrenceRule(kind: Recurrence(rawValue: recurrenceRaw ?? "") ?? .none, weekdayMask: Int(weekdayMask)) }
         set { recurrenceRaw = newValue.kind.rawValue; weekdayMask = Int16(newValue.weekdayMask) }
     }
-    var isOverdue: Bool {
+    var isOverdue: Bool { isOverdue() }
+    func isOverdue(now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard status == .todo, let dueDate else { return false }
-        return dueDate < Calendar.current.startOfDay(for: Date())
+        return dueDate < calendar.startOfDay(for: now)
     }
     var wasSentBack: Bool { status == .todo && !(reviewNote ?? "").isEmpty }
 }
@@ -158,6 +173,7 @@ final class PointEntry: NSManagedObject, Identifiable {
     @NSManaged var kindRaw: String?
     @NSManaged var date: Date?
     @NSManaged var choreID: UUID?
+    @NSManaged var redemptionID: UUID?
     @NSManaged var household: Household?
     @NSManaged var member: Member?
 
@@ -165,4 +181,24 @@ final class PointEntry: NSManagedObject, Identifiable {
         get { EntryKind(rawValue: kindRaw ?? "") ?? .chore }
         set { kindRaw = newValue.rawValue }
     }
+
+    /// What this entry pays out for. Entries with the same source are duplicates.
+    var sourceKey: String {
+        switch kind {
+        case .chore: choreID.map { "chore-\($0.uuidString)" } ?? "entry-\(id?.uuidString ?? "")"
+        case .redemption: redemptionID.map { "redemption-\($0.uuidString)" } ?? "entry-\(id?.uuidString ?? "")"
+        }
+    }
+
+    /// One entry per source, keeping the one every device would pick (lowest id).
+    static func unique(_ entries: some Sequence<PointEntry>) -> [PointEntry] {
+        Dictionary(grouping: entries, by: \.sourceKey).values.compactMap { $0.min(by: syncOrder) }
+    }
+}
+
+/// A tie-break that every device computes the same way, so duplicate cleanup converges.
+func syncOrder<T: NSManagedObject>(_ a: T, _ b: T) -> Bool {
+    let ida = (a.value(forKey: "id") as? UUID)?.uuidString ?? ""
+    let idb = (b.value(forKey: "id") as? UUID)?.uuidString ?? ""
+    return ida < idb
 }
