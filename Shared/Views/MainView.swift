@@ -30,6 +30,8 @@ struct MainView: View {
     /// Set on a shared family device: hands the device to someone else.
     var onSwitchUser: (() -> Void)?
     @State private var selection: AppSection? = .chores
+    /// Keep the sidebar showing (even on a portrait iPad) so kids can always see the sections.
+    @State private var columns = NavigationSplitViewVisibility.all
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -111,7 +113,7 @@ struct MainView: View {
     #endif
 
     private var sidebarLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(sections, selection: $selection) { section in
                 Label(section.title(isParent: me.isParent), systemImage: section.icon)
                     .badge(section == .review ? reviewCount : 0)
@@ -137,5 +139,6 @@ struct MainView: View {
             NavigationStack { content(selection ?? .chores) }
                 .id(selection)
         }
+        .navigationSplitViewStyle(.balanced)
     }
 }

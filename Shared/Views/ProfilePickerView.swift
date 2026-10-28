@@ -9,6 +9,9 @@ struct ProfilePickerView: View {
     @State private var pendingParent: Member?
     @State private var code = ""
     @State private var error: String?
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     init(household: Household) {
         self.household = household
@@ -19,7 +22,15 @@ struct ProfilePickerView: View {
 
     private var kids: [Member] { members.filter { !$0.isParent } }
     private var parents: [Member] { members.filter(\.isParent) }
-    private let columns = [GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 20)]
+    /// A centered row of tiles: up to four across on a big screen, two on a phone.
+    private func columns(for count: Int) -> [GridItem] {
+        #if os(iOS)
+        let perRow = sizeClass == .compact ? 2 : 4
+        #else
+        let perRow = 4
+        #endif
+        return Array(repeating: GridItem(.flexible(maximum: 180), spacing: 20), count: max(1, min(count, perRow)))
+    }
 
     var body: some View {
         NavigationStack {
@@ -33,14 +44,14 @@ struct ProfilePickerView: View {
                     .padding(.top, 24)
 
                     if !kids.isEmpty {
-                        LazyVGrid(columns: columns, spacing: 20) {
+                        LazyVGrid(columns: columns(for: kids.count), spacing: 20) {
                             ForEach(kids) { tile($0) }
                         }
                     }
                     if !parents.isEmpty {
                         VStack(spacing: 12) {
                             Text("Parents").font(.headline).foregroundStyle(.secondary)
-                            LazyVGrid(columns: columns, spacing: 20) {
+                            LazyVGrid(columns: columns(for: parents.count), spacing: 20) {
                                 ForEach(parents) { tile($0) }
                             }
                         }
@@ -118,6 +129,7 @@ private struct ParentCodeSheet: View {
                         .focused($focused)
                         #if os(iOS)
                         .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
                         #endif
                         .onSubmit(onSubmit)
                 } footer: {

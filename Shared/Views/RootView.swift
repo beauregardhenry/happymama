@@ -38,11 +38,11 @@ struct RootView: View {
             if let userID = identity.userID {
                 if let household = households.first {
                     if let owner = members.first(where: { $0.household == household && $0.appleUserID == userID }) {
-                        if !sharedDevice.isEnabled {
-                            MainView(household: household, me: owner)
-                        } else if let active = sharedDevice.activeMember(in: household) {
-                            MainView(household: household, me: active) { sharedDevice.signOut() }
-                                .id(active.objectID)
+                        // One MainView either way, so turning shared mode on keeps the parent where they are.
+                        if let me = sharedDevice.isEnabled ? sharedDevice.activeMember(in: household) : owner {
+                            MainView(household: household, me: me,
+                                     onSwitchUser: sharedDevice.isEnabled ? { sharedDevice.signOut() } : nil)
+                                .id(me.objectID)
                         } else {
                             ProfilePickerView(household: household)
                         }
