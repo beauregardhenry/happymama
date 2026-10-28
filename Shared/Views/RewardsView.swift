@@ -163,7 +163,8 @@ struct RewardEditorView: View {
                     HStack {
                         Text("Points")
                         Spacer()
-                        TextField("0", value: $cost, format: .number)
+                        TextField("Points", value: $cost, format: .number)
+                            .labelsHidden()
                             .multilineTextAlignment(.trailing)
                             .frame(width: 70)
                             #if os(iOS)

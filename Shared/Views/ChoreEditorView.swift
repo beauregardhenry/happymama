@@ -47,7 +47,8 @@ struct ChoreEditorView: View {
                     HStack {
                         Text("Points")
                         Spacer()
-                        TextField("0", value: $draft.points, format: .number)
+                        TextField("Points", value: $draft.points, format: .number)
+                            .labelsHidden()
                             .multilineTextAlignment(.trailing)
                             .frame(width: 70)
                             #if os(iOS)

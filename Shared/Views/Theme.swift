@@ -127,9 +127,11 @@ extension View {
     }
 
     /// Gives sheets a sensible size on the Mac, where they otherwise collapse.
+    /// The height is capped so the sheet (and its Cancel/Save buttons) always fits
+    /// inside the smallest window; taller forms scroll.
     func sheetFrame(width: CGFloat = 460, height: CGFloat = 560) -> some View {
         #if os(macOS)
-        frame(minWidth: width, minHeight: height)
+        frame(minWidth: width, minHeight: 400, idealHeight: min(height, 500))
         #else
         self
         #endif
