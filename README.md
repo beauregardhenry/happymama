@@ -16,6 +16,12 @@ Parents assign chores with point values; kids mark them done; points are awarded
 * Data: Core Data + CloudKit. The household is shared via `CKShare`; each person signs in with their own Apple ID and picks their profile.
 * Roles are enforced in the app (`HouseholdService`), not by CloudKit, so this is built for trusted family use.
 
+## App Store
+
+`docs/app-store/` has the listing copy, review notes and privacy policy. `./scripts/take-screenshots.sh`
+stages the demo family on a 6.9" iPhone and a 13" iPad simulator and writes the screenshots App Store
+Connect asks for to `docs/app-store/screenshots/` (not committed; rerun it before each submission).
+
 ## Contributing and CI
 `main` is protected: changes land through pull requests, and the CI checks must pass.
 

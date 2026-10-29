@@ -284,6 +284,9 @@ final class DemoDataTests: XCTestCase {
         XCTAssertEqual(ava.balance, 10)
         XCTAssertEqual(ava.streak(calendar: service.calendar), 3)
         XCTAssertEqual(ava.goal?.displayTitle, "Movie night pick")
+        let cleo = try XCTUnwrap(household.kids.first { $0.displayName == "Cleo" })
+        XCTAssertEqual(cleo.balance, 8)
+        XCTAssertEqual(cleo.reserved, 4, "Cleo's ice cream request is waiting for a parent")
         XCTAssertEqual(((household.rewards as? Set<Reward>) ?? []).count, 3)
     }
 }
