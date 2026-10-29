@@ -22,7 +22,7 @@ final class NotifierTests: ServiceTestCase {
 
         let events = notifier.events(household: household, me: parent)
         XCTAssertEqual(events.count, 2)
-        XCTAssertTrue(events.contains { $0.title == "Sam finished a chore" && $0.body == "Dishes is ready for you to check." })
+        XCTAssertTrue(events.contains { $0.title == "Sam finished a chore" && $0.body == "Dishes is ready for you to check. Worth 10 points." })
         XCTAssertTrue(events.contains { $0.title == "Sam wants a reward" && $0.body.contains("Treat") })
     }
 
