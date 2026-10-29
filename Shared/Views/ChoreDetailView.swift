@@ -114,6 +114,12 @@ struct ChoreDetailView: View {
             if chore.recurrence.isRepeating {
                 LabeledContent("Repeats", value: chore.recurrence.summary())
             }
+            if chore.takesTurns {
+                LabeledContent("Taking turns", value: chore.rotation.map(\.displayName).joined(separator: " → "))
+                if chore.status != .approved, let next = chore.nextAssignee {
+                    LabeledContent("Next time", value: next.displayName)
+                }
+            }
         }
     }
 

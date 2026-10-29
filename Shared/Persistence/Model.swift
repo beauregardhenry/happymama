@@ -40,6 +40,7 @@ enum HappyMamaModel {
             attr("reviewNote", .stringAttributeType),
             attr("awardedPoints", .integer32AttributeType, 0),
             attr("sourceChoreID", .UUIDAttributeType),
+            attr("rotationRaw", .stringAttributeType),
         ])
         let reward = entity(Reward.self, [
             attr("id", .UUIDAttributeType),

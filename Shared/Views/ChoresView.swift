@@ -165,7 +165,11 @@ struct ChoreRow: View {
                     if let due = chore.dueDate {
                         Text(dueText(due)).foregroundStyle(chore.isOverdue ? Color.red : Color.secondary)
                     }
-                    if chore.recurrence.isRepeating { Image(systemName: "repeat").accessibilityLabel("Repeats") }
+                    if chore.takesTurns {
+                        Image(systemName: "arrow.triangle.2.circlepath").accessibilityLabel("Taking turns")
+                    } else if chore.recurrence.isRepeating {
+                        Image(systemName: "repeat").accessibilityLabel("Repeats")
+                    }
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

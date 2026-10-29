@@ -25,14 +25,26 @@ struct ChoreEditorView: View {
             draft.points = Int(chore.points)
             draft.recurrence = chore.recurrence
             draft.dueDate = chore.dueDate
+            draft.takeTurns = chore.takesTurns
         }
         _draft = State(initialValue: draft)
         _hasDue = State(initialValue: chore?.dueDate != nil)
         _due = State(initialValue: chore?.dueDate ?? Date())
-        _selected = State(initialValue: chore?.assignee.map { [$0] } ?? [])
+        if let chore, chore.takesTurns {
+            _selected = State(initialValue: Set(chore.rotation))
+        } else {
+            _selected = State(initialValue: chore?.assignee.map { [$0] } ?? [])
+        }
     }
 
     private var isEditing: Bool { chore != nil }
+
+    private var turnsHint: String {
+        guard draft.takeTurns else { return "Each person gets their own copy to complete." }
+        guard draft.recurrence.isRepeating else { return "Choose how often it repeats below; it moves to the next person each time." }
+        let names = household.kids.filter { selected.contains($0) }.map(\.displayName)
+        return "One chore that moves to the next person each time it repeats: " + names.joined(separator: " → ") + "."
+    }
 
     var body: some View {
         NavigationStack {
@@ -82,9 +94,13 @@ struct ChoreEditorView: View {
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(selected.contains(kid) ? .isSelected : [])
                     }
-                    if !isEditing && selected.count > 1 {
-                        Text("Each person gets their own copy to complete.")
-                            .font(.caption).foregroundStyle(.secondary)
+                    if selected.count > 1 || draft.takeTurns {
+                        Toggle("Take turns", isOn: $draft.takeTurns)
+                            .onChange(of: draft.takeTurns) { _, on in
+                                // An edited chore without turns belongs to one kid again: whoever has it now.
+                                if !on, isEditing, let current = chore?.assignee { selected = [current] }
+                            }
+                        Text(turnsHint).font(.caption).foregroundStyle(.secondary)
                     }
                 }
 
@@ -121,7 +137,7 @@ struct ChoreEditorView: View {
     }
 
     private func toggle(_ kid: Member) {
-        if isEditing {
+        if isEditing && !draft.takeTurns {
             selected = [kid]
         } else if selected.contains(kid) {
             selected.remove(kid)
@@ -132,12 +148,12 @@ struct ChoreEditorView: View {
 
     private func save() {
         draft.dueDate = hasDue ? due : nil
+        if selected.count < 2 { draft.takeTurns = false }
+        let ordered = household.kids.filter { selected.contains($0) }
         do {
             if let chore {
-                guard let assignee = selected.first else { throw ServiceError.invalid("Choose who should do it.") }
-                try service.updateChore(chore, with: draft, assignee: assignee, by: me)
+                try service.updateChore(chore, with: draft, assignees: ordered, by: me)
             } else {
-                let ordered = household.kids.filter { selected.contains($0) }
                 try service.createChores(draft, assignees: ordered, in: household, by: me)
             }
             dismiss()
