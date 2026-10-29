@@ -33,11 +33,9 @@ extension WidgetSnapshot {
 
     /// Saves the snapshot and asks the widget to redraw if anything changed.
     static func publish(household: Household, me: Member) {
-        #if os(iOS)
         let snapshot = WidgetSnapshot(household: household, me: me)
         if (try? snapshot.save()) == true {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }
-        #endif
     }
 }

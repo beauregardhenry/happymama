@@ -111,6 +111,8 @@ targets:
     type: application
     platform: macOS
     sources: [Shared]
+    dependencies:
+      - target: HappyMamaWidget-macOS
     settings:
       base:
         PRODUCT_NAME: HappyMama
@@ -132,6 +134,8 @@ targets:
         CFBundleDisplayName: Happy Mama
         LSMinimumSystemVersion: "14.0"
         LSApplicationCategoryType: public.app-category.lifestyle
+        # Mac app groups carry the team prefix; WidgetSnapshot reads the name from here.
+        HappyMamaAppGroup: $(TeamIdentifierPrefix)group.com.happymama.HappyMama
         CKSharingSupported: true
         CloudKitContainerID: iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         ITSAppUsesNonExemptEncryption: false
@@ -144,6 +148,42 @@ targets:
         com.apple.developer.icloud-container-identifiers:
           - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         com.apple.developer.icloud-services: [CloudKit]
+        com.apple.security.application-groups: [$(TeamIdentifierPrefix)group.com.happymama.HappyMama]
+
+  HappyMamaWidget-macOS:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Widget
+      - Shared/WidgetData
+    settings:
+      base:
+        PRODUCT_NAME: HappyMamaWidget
+        PRODUCT_MODULE_NAME: HappyMamaWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.happymama.HappyMama.Widget
+        ARCHS: "$(ARCHS_STANDARD)"
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/Widget-macOS-Info.plist
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SKIP_INSTALL: YES
+      configs:
+        Local:
+          CODE_SIGN_ENTITLEMENTS: ""
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "-"
+    info:
+      path: Config/Widget-macOS-Info.plist
+      properties:
+        CFBundleDisplayName: Happy Mama
+        HappyMamaAppGroup: $(TeamIdentifierPrefix)group.com.happymama.HappyMama
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Config/Widget-macOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(TeamIdentifierPrefix)group.com.happymama.HappyMama]
 
   HappyMamaTests:
     type: bundle.unit-test
