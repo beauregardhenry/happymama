@@ -9,10 +9,10 @@ extension HouseholdService {
         let household = try createHousehold(name: "The Hendersons", yourName: "Mama", emoji: Theme.parentEmojis[0], userID: userID)
         guard let mama = household.memberList.first else { throw ServiceError.invalid("Demo household has no parent.") }
 
-        try addMember(name: "Papa", role: .parent, emoji: Theme.parentEmojis[1], to: household, by: mama)
+        let papa = try addMember(name: "Papa", role: .parent, emoji: Theme.parentEmojis[1], to: household, by: mama)
         let ava = try addMember(name: "Ava", role: .kid, emoji: Theme.kidEmojis[0], to: household, by: mama)
         let ben = try addMember(name: "Ben", role: .kid, emoji: Theme.kidEmojis[1], to: household, by: mama)
-        try addMember(name: "Cleo", role: .kid, emoji: Theme.kidEmojis[2], to: household, by: mama)
+        let cleo = try addMember(name: "Cleo", role: .kid, emoji: Theme.kidEmojis[2], to: household, by: mama)
 
         let today = calendar.startOfDay(for: Date())
         func day(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: offset, to: today) ?? today }
@@ -46,8 +46,18 @@ extension HouseholdService {
 
         let movie = try saveReward(nil, title: "Movie night pick", emoji: "🎬", cost: 20, isActive: true, in: household, by: mama)
         try setGoal(movie, for: ava, by: mama)
-        try saveReward(nil, title: "Ice cream trip", emoji: "🍦", cost: 4, isActive: true, in: household, by: mama)
+        let iceCream = try saveReward(nil, title: "Ice cream trip", emoji: "🍦", cost: 4, isActive: true, in: household, by: mama)
         try saveReward(nil, title: "Extra screen time", emoji: "🎮", cost: 12, isActive: true, in: household, by: mama)
+
+        // Cleo earned some points, asked to spend them, and turned in another chore,
+        // so a parent's Review has a little of everything.
+        let dishes = try createChores(ChoreDraft(title: "Empty the dishwasher", points: 8, dueDate: day(-1)), assignees: [cleo], in: household, by: mama)
+        try markComplete(dishes[0], by: cleo, note: nil, photo: nil)
+        dishes[0].completedAt = day(-1)
+        try approve(dishes[0], by: papa)
+        try requestRedemption(of: iceCream, by: cleo)
+        let tidy = try createChores(ChoreDraft(title: "Tidy the playroom", points: 6, dueDate: today), assignees: [cleo], in: household, by: mama)
+        try markComplete(tidy[0], by: cleo, note: "Lego is all in the box!", photo: nil)
         return household
     }
 }

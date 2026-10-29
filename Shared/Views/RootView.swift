@@ -4,6 +4,7 @@ import CoreData
 struct RootView: View {
     @EnvironmentObject private var identity: Identity
     @EnvironmentObject private var sharedDevice: SharedDevice
+    @EnvironmentObject private var service: HouseholdService
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var box: PersistenceBox
     @FetchRequest(sortDescriptors: [NSSortDescriptor(keyPath: \Household.createdAt, ascending: true)])
@@ -20,6 +21,10 @@ struct RootView: View {
                 description: Text(error.localizedDescription))
         } else {
             content
+                .onChange(of: identity.userID, initial: true) {
+                    ScreenshotSetup.apply(households: Array(households), identity: identity,
+                                          sharedDevice: sharedDevice, service: service)
+                }
                 // A shared device goes back to the picker whenever it leaves the screen.
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {

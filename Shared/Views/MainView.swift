@@ -29,7 +29,7 @@ struct MainView: View {
     @ObservedObject var me: Member
     /// Set on a shared family device: hands the device to someone else.
     var onSwitchUser: (() -> Void)?
-    @State private var selection: AppSection? = .chores
+    @State private var selection: AppSection? = ScreenshotSetup.section ?? .chores
     /// Keep the sidebar showing (even on a portrait iPad) so kids can always see the sections.
     @State private var columns = NavigationSplitViewVisibility.all
     #if os(iOS)
