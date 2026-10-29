@@ -44,6 +44,7 @@ struct PointsBadge: View {
             .padding(.vertical, 3)
             .background(Theme.accent.opacity(0.15), in: Capsule())
             .foregroundStyle(Theme.accent)
+            .accessibilityLabel("\(points) point\(points == 1 ? "" : "s")")
     }
 }
 
@@ -114,9 +115,10 @@ struct PhotoView: View {
 // MARK: Shared modifiers
 
 extension View {
-    /// Presents a thrown error to the user.
+    /// Presents a thrown error to the user. The message says what to fix; the title
+    /// stays neutral because most of these are rules ("Give the chore a title.").
     func errorAlert(_ message: Binding<String?>) -> some View {
-        alert("Something went wrong", isPresented: Binding(
+        alert("Couldn't do that", isPresented: Binding(
             get: { message.wrappedValue != nil },
             set: { if !$0 { message.wrappedValue = nil } }
         )) {
@@ -135,5 +137,21 @@ extension View {
         #else
         self
         #endif
+    }
+
+    /// Keeps a full-screen form to a comfortable reading width on iPad and the Mac,
+    /// while its background still fills the window.
+    func readableWidth(_ maxWidth: CGFloat = 640) -> some View {
+        modifier(ReadableWidth(maxWidth: maxWidth))
+    }
+}
+
+private struct ReadableWidth: ViewModifier {
+    let maxWidth: CGFloat
+
+    func body(content: Content) -> some View {
+        GeometryReader { proxy in
+            content.contentMargins(.horizontal, max(0, (proxy.size.width - maxWidth) / 2), for: .scrollContent)
+        }
     }
 }

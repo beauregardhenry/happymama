@@ -11,6 +11,7 @@ struct RewardsView: View {
     @State private var showingNew = false
     @State private var confirming: Reward?
     @State private var error: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(household: Household, me: Member) {
         self.household = household
@@ -50,18 +51,24 @@ struct RewardsView: View {
                                 Button("Delete", systemImage: "trash", role: .destructive) { delete(reward) }
                             }
                     } else {
-                        HStack {
+                        // At the largest text sizes the buttons go under the name.
+                        let layout = typeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                            : AnyLayout(HStackLayout())
+                        layout {
                             rewardLabel(reward)
-                            let isGoal = me.goal?.id == reward.id
-                            Button { setGoal(isGoal ? nil : reward) } label: {
-                                Image(systemName: isGoal ? "star.fill" : "star")
-                                    .foregroundStyle(isGoal ? Color.orange : Color.secondary)
+                            HStack(spacing: 16) {
+                                let isGoal = me.goal?.id == reward.id
+                                Button { setGoal(isGoal ? nil : reward) } label: {
+                                    Image(systemName: isGoal ? "star.fill" : "star")
+                                        .foregroundStyle(isGoal ? Color.orange : Color.secondary)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(isGoal ? "Stop saving for this" : "Save for this")
+                                Button("Redeem") { confirming = reward }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(me.available < Int(reward.cost))
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(isGoal ? "Stop saving for this" : "Save for this")
-                            Button("Redeem") { confirming = reward }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(me.available < Int(reward.cost))
                         }
                     }
                 }

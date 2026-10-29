@@ -118,7 +118,7 @@ struct WelcomeView: View {
             Form {
                 Section {
                     VStack(spacing: 8) {
-                        Text("🏡").font(.system(size: 56))
+                        Text("🏡").font(.system(size: 56)).accessibilityHidden(true)
                         Text("Welcome to Happy Mama").font(.title2.bold())
                         Text("Assign chores, check them off, and cheer everyone on with points.")
                             .multilineTextAlignment(.center)
@@ -146,6 +146,7 @@ struct WelcomeView: View {
                 }
             }
             .formStyle(.grouped)
+            .readableWidth()
             .navigationTitle("Happy Mama")
         }
         .errorAlert($error)
@@ -219,10 +220,15 @@ struct ClaimProfileView: View {
                 }
             }
             .formStyle(.grouped)
+            .readableWidth()
             .navigationTitle("Who are you?")
         }
         .alert("Parent code", isPresented: Binding(get: { pendingParent != nil }, set: { if !$0 { pendingParent = nil } })) {
-            TextField("6-digit code", text: $code)
+            SecureField("Parent code", text: $code)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                #endif
             Button("Continue") {
                 if let member = pendingParent { claim(member, code: code) }
                 code = ""
