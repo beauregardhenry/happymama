@@ -6,6 +6,7 @@ struct ChoresView: View {
     let me: Member
     @FetchRequest private var chores: FetchedResults<Chore>
     @State private var showingNew = false
+    @State private var showingLibrary = false
 
     init(household: Household, me: Member) {
         self.household = household
@@ -57,10 +58,16 @@ struct ChoresView: View {
         }
         .overlay {
             if chores.isEmpty {
-                ContentUnavailableView(
-                    me.isParent ? "No chores yet" : "Nothing to do!",
-                    systemImage: "checklist",
-                    description: Text(me.isParent ? "Tap + to assign the first chore." : "When a parent gives you a chore, it shows up here."))
+                ContentUnavailableView {
+                    Label(me.isParent ? "No chores yet" : "Nothing to do!", systemImage: "checklist")
+                } description: {
+                    Text(me.isParent ? "Tap + to assign the first chore, or start from a list of ideas by age."
+                                     : "When a parent gives you a chore, it shows up here.")
+                } actions: {
+                    if me.isParent {
+                        Button("Browse Chore Ideas") { showingLibrary = true }.buttonStyle(.borderedProminent)
+                    }
+                }
             }
         }
         .navigationTitle(me.isParent ? "Chores" : "My Chores")
@@ -68,12 +75,18 @@ struct ChoresView: View {
         .toolbar {
             if me.isParent {
                 ToolbarItem(placement: .primaryAction) {
+                    Button { showingLibrary = true } label: { Label("Chore Ideas", systemImage: "lightbulb") }
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Button { showingNew = true } label: { Label("New Chore", systemImage: "plus") }
                 }
             }
         }
         .sheet(isPresented: $showingNew) {
             ChoreEditorView(household: household, me: me, chore: nil)
+        }
+        .sheet(isPresented: $showingLibrary) {
+            ChoreLibraryView(household: household, me: me)
         }
     }
 
