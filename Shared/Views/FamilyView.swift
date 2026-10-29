@@ -182,7 +182,7 @@ struct MemberDetailView: View {
                     if !member.isParent {
                         VStack(alignment: .trailing) {
                             Text("\(member.balance)")
-                                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                                .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                                 .foregroundStyle(Theme.accent)
                             Text("points").font(.caption).foregroundStyle(.secondary)
                         }

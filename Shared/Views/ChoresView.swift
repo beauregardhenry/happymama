@@ -106,6 +106,7 @@ struct ChoresView: View {
 
 struct BalanceCard: View {
     @ObservedObject var member: Member
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let streak = member.streak()
@@ -121,10 +122,14 @@ struct BalanceCard: View {
                     }
                 }
                 Spacer()
-                Text("\(member.available)")
-                    .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Theme.accent)
-                    .contentTransition(.numericText())
+                // The line above already says the points; at the largest text sizes there's no room for both.
+                if !typeSize.isAccessibilitySize {
+                    Text("\(member.available)")
+                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
+                        .foregroundStyle(Theme.accent)
+                        .contentTransition(.numericText())
+                        .accessibilityHidden(true)
+                }
             }
             if let goal = member.goal {
                 GoalProgress(member: member, goal: goal)
@@ -144,25 +149,46 @@ struct GoalProgress: View {
     var body: some View {
         let reached = member.available >= Int(goal.cost)
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Saving for \(goal.displayEmoji) \(goal.displayTitle)").font(.subheadline.weight(.medium))
-                Spacer()
-                Text(reached ? "Ready!" : "\(max(0, member.available)) / \(goal.cost)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(reached ? Color.green : Color.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    title
+                    Spacer()
+                    amount(reached)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    title
+                    amount(reached)
+                }
             }
             ProgressView(value: member.goalProgress)
                 .tint(reached ? .green : Theme.accent)
+                .accessibilityHidden(true)
         }
+    }
+
+    private var title: some View {
+        Text("Saving for \(goal.displayEmoji) \(goal.displayTitle)").font(.subheadline.weight(.medium))
+    }
+
+    private func amount(_ reached: Bool) -> some View {
+        Text(reached ? "Ready!" : "\(max(0, member.available)) / \(goal.cost)")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(reached ? Color.green : Color.secondary)
+            .accessibilityLabel(reached ? "You have enough!" : "\(max(0, member.available)) of \(goal.cost) points")
     }
 }
 
 struct ChoreRow: View {
     @ObservedObject var chore: Chore
     var showAssignee: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 12) {
+        // At the largest text sizes the points move under the title instead of squeezing it.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 12))
+        layout {
             if showAssignee, let assignee = chore.assignee {
                 Avatar(member: assignee, size: 38)
             } else {
@@ -170,6 +196,7 @@ struct ChoreRow: View {
                     .font(.title3)
                     .foregroundStyle(statusColor)
                     .frame(width: 38)
+                    .accessibilityLabel(statusName)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(chore.displayTitle).font(.headline)
@@ -189,10 +216,20 @@ struct ChoreRow: View {
                 if chore.wasSentBack { StatusChip(text: "Sent back", color: .orange) }
                 if chore.status == .pendingReview && showAssignee { StatusChip(text: "Needs review", color: .blue) }
             }
-            Spacer()
+            if !typeSize.isAccessibilitySize { Spacer() }
             PointsBadge(points: Int(chore.status == .approved ? chore.awardedPoints : chore.points))
         }
         .padding(.vertical, 2)
+        // One VoiceOver stop per chore: "Dishes, Ava, Today, Repeats, 5 points".
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusName: String {
+        switch chore.status {
+        case .todo: chore.isOverdue ? "Overdue" : "To do"
+        case .pendingReview: "Waiting for approval"
+        case .approved: "Done"
+        }
     }
 
     private var statusIcon: String {

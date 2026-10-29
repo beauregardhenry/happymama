@@ -62,8 +62,18 @@ struct ProfilePickerView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .sheet(item: $pendingParent) { parent in
-            ParentCodeSheet(parent: parent, code: $code) { submit(parent) }
+        // An alert rather than a sheet: it stays small on iPad, where a sheet fills half the screen.
+        .alert(pendingParent.map { "Hi, \($0.displayName)" } ?? "",
+               isPresented: Binding(get: { pendingParent != nil }, set: { if !$0 { pendingParent = nil } })) {
+            SecureField("Parent code", text: $code)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                #endif
+            Button("Continue") { if let parent = pendingParent { submit(parent) } }
+            Button("Cancel", role: .cancel) { code = "" }
+        } message: {
+            Text("Enter the parent code. Any parent can find or change it under Family.")
         }
         .errorAlert($error)
     }
@@ -105,51 +115,5 @@ struct ProfilePickerView: View {
 
     private func signIn(_ member: Member, code: String?) {
         do { try sharedDevice.signIn(member, code: code) } catch { self.error = error.localizedDescription }
-    }
-}
-
-private struct ParentCodeSheet: View {
-    let parent: Member
-    @Binding var code: String
-    let onSubmit: () -> Void
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    HStack(spacing: 12) {
-                        Avatar(member: parent, size: 48)
-                        Text(parent.displayName).font(.title3.bold())
-                    }
-                }
-                Section {
-                    SecureField("Parent code", text: $code)
-                        .focused($focused)
-                        #if os(iOS)
-                        .keyboardType(.numberPad)
-                        .textContentType(.oneTimeCode)
-                        #endif
-                        .onSubmit(onSubmit)
-                } footer: {
-                    Text("Any parent can find or change the code under Family.")
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle("Enter code")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Continue", action: onSubmit).disabled(code.trimmed.isEmpty)
-                }
-            }
-            .onAppear { focused = true }
-        }
-        .sheetFrame(width: 380, height: 360)
-        .presentationDetents([.medium])
     }
 }
