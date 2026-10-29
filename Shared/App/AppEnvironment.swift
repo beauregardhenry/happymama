@@ -53,6 +53,16 @@ final class AppEnvironment {
         try? service.resolveSyncDuplicates(in: household)
         notifier.sync(household: household, me: me)
         WidgetSnapshot.publish(household: household, me: me)
+        // Lets Siri offer "I finished the dishes" with the current chore names.
+        HappyMamaShortcuts.updateAppShortcutParameters()
+    }
+
+    /// For Siri and Shortcuts, which can run before any window opens.
+    func intentContext() async -> (household: Household, me: Member, service: HouseholdService)? {
+        start()
+        if identity.userID == nil { await identity.refresh() }
+        guard let (household, me) = currentHousehold() else { return nil }
+        return (household, me, service)
     }
 
     /// A parent tapped Approve, Send back or Deny on a notification.
