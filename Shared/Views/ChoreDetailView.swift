@@ -106,9 +106,9 @@ struct ChoreDetailView: View {
                     HStack(spacing: 6) { Text(assignee.displayEmoji); Text(assignee.displayName) }
                 }
             }
-            if let due = chore.dueDate {
+            if let due = dueText(for: chore) {
                 LabeledContent("Due") {
-                    Text(dueText(due)).foregroundStyle(chore.isOverdue ? Color.red : Color.primary)
+                    Text(due).foregroundStyle(chore.isOverdue ? Color.red : Color.primary)
                 }
             }
             if chore.recurrence.isRepeating {

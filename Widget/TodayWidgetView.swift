@@ -67,6 +67,9 @@ private struct KidWidgetView: View {
                         HStack {
                             Image(systemName: "circle").font(.caption).foregroundStyle(.secondary)
                             Text(chore.title).font(.subheadline).lineLimit(1)
+                            if let time = chore.dueTimeText {
+                                Text(time).font(.caption2).foregroundStyle(.secondary)
+                            }
                             Spacer(minLength: 4)
                             Text("\(chore.points)").font(.caption.weight(.semibold)).foregroundStyle(Color.happy)
                         }
@@ -168,5 +171,15 @@ private struct ParentWidgetView: View {
     private func leftText(_ kid: WidgetSnapshot.Kid) -> String {
         let left = kid.today().count
         return left == 0 ? "done" : "\(left) left"
+    }
+}
+
+extension WidgetSnapshot.ChoreItem {
+    /// "5:00 PM" for a chore due by a time.
+    var dueTimeText: String? {
+        guard let dueTime, let due else { return nil }
+        let calendar = Calendar.current
+        return calendar.date(byAdding: .minute, value: dueTime, to: calendar.startOfDay(for: due))?
+            .formatted(date: .omitted, time: .shortened)
     }
 }

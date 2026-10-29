@@ -23,7 +23,7 @@ struct ChoresView: View {
 
     private func dueSorted(_ list: [Chore]) -> [Chore] {
         list.sorted { a, b in
-            switch (a.dueDate, b.dueDate) {
+            switch (a.dueAt(), b.dueAt()) {
             case let (x?, y?): return x < y
             case (_?, nil): return true
             case (nil, _?): return false
@@ -202,8 +202,8 @@ struct ChoreRow: View {
                 Text(chore.displayTitle).font(.headline)
                 HStack(spacing: 6) {
                     if showAssignee, let assignee = chore.assignee { Text(assignee.displayName) }
-                    if let due = chore.dueDate {
-                        Text(dueText(due)).foregroundStyle(chore.isOverdue ? Color.red : Color.secondary)
+                    if let due = dueText(for: chore) {
+                        Text(due).foregroundStyle(chore.isOverdue ? Color.red : Color.secondary)
                     }
                     if chore.takesTurns {
                         Image(systemName: "arrow.triangle.2.circlepath").accessibilityLabel("Taking turns")

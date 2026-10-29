@@ -245,6 +245,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
         return chores.compactMap { chore in
             guard let due = chore.dueDate, let id = chore.id else { return nil }
+            if let dueAt = chore.dueAt(calendar: calendar), chore.dueTime != nil {
+                // An hour's warning, but never before the start of the day it's due.
+                let fireDate = max(dueAt.addingTimeInterval(-3600), calendar.startOfDay(for: due))
+                guard fireDate > now else { return nil }
+                return Reminder(id: "due-\(id.uuidString)", title: "Due soon: \(chore.displayTitle)",
+                                body: "By \(dueAt.formatted(date: .omitted, time: .shortened)). Worth \(chore.points) points.",
+                                fireAt: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate))
+            }
             var parts = calendar.dateComponents([.year, .month, .day], from: due)
             parts.hour = 9
             guard let fireDate = calendar.date(from: parts), fireDate > now else { return nil }

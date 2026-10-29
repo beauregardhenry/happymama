@@ -8,6 +8,8 @@ struct WidgetSnapshot: Codable, Equatable {
         var title: String
         var points: Int
         var due: Date?
+        /// Minutes after midnight, when the chore is due by a time.
+        var dueTime: Int?
     }
 
     struct Kid: Codable, Equatable {
