@@ -144,6 +144,8 @@ final class Chore: NSManagedObject, Identifiable {
     @NSManaged var sourceChoreID: UUID?
     /// For a chore kids take turns on: the member ids in turn order, comma-separated.
     @NSManaged var rotationRaw: String?
+    /// Minutes after midnight the chore is due by, or -1 for any time that day.
+    @NSManaged var dueMinute: Int16
     @NSManaged var household: Household?
     @NSManaged var assignee: Member?
 
@@ -174,10 +176,22 @@ final class Chore: NSManagedObject, Identifiable {
         get { RecurrenceRule(kind: Recurrence(rawValue: recurrenceRaw ?? "") ?? .none, weekdayMask: Int(weekdayMask)) }
         set { recurrenceRaw = newValue.kind.rawValue; weekdayMask = Int16(newValue.weekdayMask) }
     }
+    /// The time of day it's due by, in minutes after midnight, if a parent set one.
+    var dueTime: Int? {
+        get { dueMinute >= 0 ? Int(dueMinute) : nil }
+        set { dueMinute = Int16(newValue.map { min(max($0, 0), 24 * 60 - 1) } ?? -1) }
+    }
+    /// The moment it's due: the due time on the due date, or the end of that day.
+    func dueAt(calendar: Calendar = .current) -> Date? {
+        guard let dueDate else { return nil }
+        let day = calendar.startOfDay(for: dueDate)
+        if let dueTime { return calendar.date(byAdding: .minute, value: dueTime, to: day) }
+        return calendar.date(byAdding: .day, value: 1, to: day)
+    }
     var isOverdue: Bool { isOverdue() }
     func isOverdue(now: Date = Date(), calendar: Calendar = .current) -> Bool {
-        guard status == .todo, let dueDate else { return false }
-        return dueDate < calendar.startOfDay(for: now)
+        guard status == .todo, let due = dueAt(calendar: calendar) else { return false }
+        return due <= now
     }
     var wasSentBack: Bool { status == .todo && !(reviewNote ?? "").isEmpty }
 }

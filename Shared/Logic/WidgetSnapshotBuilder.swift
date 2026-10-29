@@ -19,9 +19,10 @@ extension WidgetSnapshot {
     private static func kid(_ member: Member, chores: Set<Chore>, now: Date, calendar: Calendar) -> Kid {
         let open = chores
             .filter { $0.assignee?.id == member.id && $0.status == .todo }
-            .sorted { ($0.dueDate ?? .distantFuture, $0.displayTitle) < ($1.dueDate ?? .distantFuture, $1.displayTitle) }
+            .sorted { ($0.dueAt(calendar: calendar) ?? .distantFuture, $0.displayTitle)
+                < ($1.dueAt(calendar: calendar) ?? .distantFuture, $1.displayTitle) }
             .prefix(20)
-            .map { ChoreItem(title: $0.displayTitle, points: Int($0.points), due: $0.dueDate) }
+            .map { ChoreItem(title: $0.displayTitle, points: Int($0.points), due: $0.dueDate, dueTime: $0.dueTime) }
         let goal = member.goal
         return Kid(name: member.displayName, emoji: member.displayEmoji, points: member.available,
                    streak: member.streak(now: now, calendar: calendar),

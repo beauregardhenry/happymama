@@ -69,6 +69,13 @@ func dueText(_ date: Date) -> String {
     return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
 }
 
+/// "Today" or "Today, 5:00 PM" when the chore has a due time.
+func dueText(for chore: Chore) -> String? {
+    guard let due = chore.dueDate else { return nil }
+    guard chore.dueTime != nil, let at = chore.dueAt() else { return dueText(due) }
+    return dueText(due) + ", " + at.formatted(date: .omitted, time: .shortened)
+}
+
 // MARK: Photos
 
 enum ImageProcessing {

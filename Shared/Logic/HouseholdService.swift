@@ -161,6 +161,8 @@ final class HouseholdService: ObservableObject {
         var notes = ""
         var points = 10
         var dueDate: Date?
+        /// Minutes after midnight on the due date; nil means any time that day.
+        var dueTime: Int?
         var recurrence = RecurrenceRule()
         /// One chore that moves to the next kid each time it repeats, instead of a copy each.
         var takeTurns = false
@@ -202,6 +204,7 @@ final class HouseholdService: ObservableObject {
         chore.notes = draft.notes.trimmed
         chore.points = Int32(max(0, draft.points))
         chore.dueDate = draft.dueDate.map { calendar.startOfDay(for: $0) }
+        chore.dueTime = draft.dueDate == nil ? nil : draft.dueTime
         chore.recurrence = draft.recurrence
         chore.rotationIDs = draft.takeTurns ? assignees.compactMap(\.id) : []
         let assignee = assignees.first { $0.id == chore.assignee?.id } ?? first
@@ -301,6 +304,7 @@ final class HouseholdService: ObservableObject {
         chore.points = Int32(max(0, draft.points))
         chore.status = .todo
         chore.dueDate = draft.dueDate.map { calendar.startOfDay(for: $0) }
+        chore.dueTime = draft.dueDate == nil ? nil : draft.dueTime
         chore.createdAt = Date()
         chore.recurrence = draft.recurrence
         chore.household = household
@@ -320,6 +324,7 @@ final class HouseholdService: ObservableObject {
         draft.notes = chore.notes ?? ""
         draft.points = Int(chore.points)
         draft.dueDate = next
+        draft.dueTime = chore.dueTime
         draft.recurrence = rule
         let copy = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
         copy.sourceChoreID = chore.id

@@ -11,6 +11,8 @@ struct ChoreEditorView: View {
     @State private var draft: HouseholdService.ChoreDraft
     @State private var hasDue: Bool
     @State private var due: Date
+    @State private var hasTime: Bool
+    @State private var time: Date
     @State private var selected: Set<Member>
     @State private var error: String?
 
@@ -30,6 +32,11 @@ struct ChoreEditorView: View {
         _draft = State(initialValue: draft)
         _hasDue = State(initialValue: chore?.dueDate != nil)
         _due = State(initialValue: chore?.dueDate ?? Date())
+        _hasTime = State(initialValue: chore?.dueTime != nil)
+        // The picker needs a date; only its hour and minute are used. New times start at 5pm.
+        let minutes = chore?.dueTime ?? 17 * 60
+        _time = State(initialValue: Calendar.current.date(byAdding: .minute, value: minutes,
+                                                          to: Calendar.current.startOfDay(for: Date())) ?? Date())
         if let chore, chore.takesTurns {
             _selected = State(initialValue: Set(chore.rotation))
         } else {
@@ -108,6 +115,10 @@ struct ChoreEditorView: View {
                     Toggle("Due date", isOn: $hasDue)
                     if hasDue {
                         DatePicker("Due", selection: $due, displayedComponents: .date)
+                        Toggle("By a certain time", isOn: $hasTime)
+                        if hasTime {
+                            DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                        }
                     }
                     Picker("Repeat", selection: $draft.recurrence.kind) {
                         ForEach(Recurrence.allCases) { Text($0.title).tag($0) }
@@ -148,6 +159,8 @@ struct ChoreEditorView: View {
 
     private func save() {
         draft.dueDate = hasDue ? due : nil
+        let clock = Calendar.current.dateComponents([.hour, .minute], from: time)
+        draft.dueTime = hasDue && hasTime ? (clock.hour ?? 0) * 60 + (clock.minute ?? 0) : nil
         if selected.count < 2 { draft.takeTurns = false }
         let ordered = household.kids.filter { selected.contains($0) }
         do {
