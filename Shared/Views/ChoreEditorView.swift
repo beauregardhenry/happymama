@@ -28,6 +28,7 @@ struct ChoreEditorView: View {
             draft.recurrence = chore.recurrence
             draft.dueDate = chore.dueDate
             draft.takeTurns = chore.takesTurns
+            draft.autoApprove = chore.autoApprove
         }
         _draft = State(initialValue: draft)
         _hasDue = State(initialValue: chore?.dueDate != nil)
@@ -76,8 +77,11 @@ struct ChoreEditorView: View {
                         Stepper("Points", value: $draft.points, in: 0...10_000, step: 5)
                             .labelsHidden()
                     }
+                    Toggle("Approve automatically", isOn: $draft.autoApprove)
                 } footer: {
-                    Text("Awarded only after a parent confirms the chore is done.")
+                    Text(draft.autoApprove
+                         ? "Points are awarded as soon as it's marked done. Good for small daily habits."
+                         : "Awarded only after a parent confirms the chore is done.")
                 }
 
                 Section(isEditing ? "Assigned to" : "Assign to") {

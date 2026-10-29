@@ -146,6 +146,8 @@ final class Chore: NSManagedObject, Identifiable {
     @NSManaged var rotationRaw: String?
     /// Minutes after midnight the chore is due by, or -1 for any time that day.
     @NSManaged var dueMinute: Int16
+    /// Points are awarded as soon as the kid marks it done.
+    @NSManaged var autoApprove: Bool
     @NSManaged var household: Household?
     @NSManaged var assignee: Member?
 
