@@ -59,6 +59,8 @@ final class Member: NSManagedObject, Identifiable {
     @NSManaged var colorIndex: Int16
     @NSManaged var appleUserID: String?
     @NSManaged var createdAt: Date?
+    /// The reward a kid is saving toward.
+    @NSManaged var goalRewardID: UUID?
     @NSManaged var household: Household?
     @NSManaged var assignedChores: NSSet?
     @NSManaged var redemptions: NSSet?
@@ -88,6 +90,36 @@ final class Member: NSManagedObject, Identifiable {
             .reduce(0) { $0 + Int($1.cost) }
     }
     var available: Int { balance - reserved }
+
+    /// The reward this kid is saving for, while it's still offered.
+    var goal: Reward? {
+        guard let goalRewardID else { return nil }
+        return ((household?.rewards as? Set<Reward>) ?? []).first { $0.id == goalRewardID && $0.isActive }
+    }
+    /// How close `available` is to the goal, from 0 to 1.
+    var goalProgress: Double {
+        guard let cost = goal?.cost, cost > 0 else { return 0 }
+        return min(1, Double(max(0, available)) / Double(cost))
+    }
+
+    /// Days in a row on which this kid turned in a chore that wasn't sent back, ending
+    /// today or yesterday. Yesterday still counts so the streak doesn't read 0 every morning.
+    func streak(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let days = Set(((assignedChores as? Set<Chore>) ?? []).compactMap { chore -> Date? in
+            guard chore.status != .todo, let done = chore.completedAt else { return nil }
+            return calendar.startOfDay(for: done)
+        })
+        var day = calendar.startOfDay(for: now)
+        if !days.contains(day), let yesterday = calendar.date(byAdding: .day, value: -1, to: day) {
+            day = yesterday
+        }
+        var count = 0
+        while days.contains(day), let previous = calendar.date(byAdding: .day, value: -1, to: day) {
+            count += 1
+            day = previous
+        }
+        return count
+    }
 }
 
 @objc(Chore)

@@ -148,6 +148,9 @@ struct MemberRow: View {
                 HStack(spacing: 6) {
                     Text(member.role.title)
                     if !member.isClaimed { StatusChip(text: "Not joined yet", color: .orange) }
+                    if !member.isParent, case let streak = member.streak(), streak > 0 {
+                        Text("🔥 \(streak)").accessibilityLabel("\(streak)-day streak")
+                    }
                 }
                 .font(.subheadline).foregroundStyle(.secondary)
             }

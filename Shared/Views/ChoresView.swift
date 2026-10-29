@@ -95,23 +95,52 @@ struct BalanceCard: View {
     @ObservedObject var member: Member
 
     var body: some View {
-        HStack(spacing: 14) {
-            Avatar(member: member, size: 52)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Hi, \(member.displayName)!").font(.title3.bold())
-                Text(member.reserved > 0 ? "\(member.available) points · \(member.reserved) on hold" : "\(member.available) points")
-                    .font(.subheadline).foregroundStyle(.secondary)
+        let streak = member.streak()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                Avatar(member: member, size: 52)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hi, \(member.displayName)!").font(.title3.bold())
+                    Text(member.reserved > 0 ? "\(member.available) points · \(member.reserved) on hold" : "\(member.available) points")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    if streak > 0 {
+                        Text("🔥 \(streak)-day streak").font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
+                    }
+                }
+                Spacer()
+                Text("\(member.available)")
+                    .font(.system(size: 34, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+                    .contentTransition(.numericText())
             }
-            Spacer()
-            Text("\(member.available)")
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
-                .foregroundStyle(Theme.accent)
-                .contentTransition(.numericText())
+            if let goal = member.goal {
+                GoalProgress(member: member, goal: goal)
+            }
         }
         .padding()
         .background(Theme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+struct GoalProgress: View {
+    @ObservedObject var member: Member
+    let goal: Reward
+
+    var body: some View {
+        let reached = member.available >= Int(goal.cost)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Saving for \(goal.displayEmoji) \(goal.displayTitle)").font(.subheadline.weight(.medium))
+                Spacer()
+                Text(reached ? "Ready!" : "\(max(0, member.available)) / \(goal.cost)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(reached ? Color.green : Color.secondary)
+            }
+            ProgressView(value: member.goalProgress)
+                .tint(reached ? .green : Theme.accent)
+        }
     }
 }
 

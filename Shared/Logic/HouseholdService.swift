@@ -342,6 +342,17 @@ final class HouseholdService: ObservableObject {
         return target
     }
 
+    /// A kid picks a reward to save toward, or a parent picks it for them. nil clears it.
+    func setGoal(_ reward: Reward?, for kid: Member, by me: Member) throws {
+        guard !kid.isParent else { throw ServiceError.invalid("Only kids save toward rewards.") }
+        guard me.isParent || me.id == kid.id else { throw ServiceError.notAllowed("You can only pick your own goal.") }
+        if let reward, !reward.isActive || reward.household != kid.household {
+            throw ServiceError.invalid("That reward isn't available.")
+        }
+        kid.goalRewardID = reward?.id
+        try save()
+    }
+
     func deleteReward(_ reward: Reward, by me: Member) throws {
         try requireParent(me)
         context.delete(reward)
