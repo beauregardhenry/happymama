@@ -12,8 +12,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let defaults = UserDefaults.standard
 
+    /// Runs a button tapped on a notification. Set by `AppEnvironment`, which knows who is signed in.
+    var onAction: (@MainActor (Action, UUID, String?) async -> Void)?
+
     func start() {
         center.delegate = self
+        center.setNotificationCategories(Self.categories)
     }
 
     func requestAuthorization() async -> Bool {
@@ -27,10 +31,112 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         [.banner, .sound]
     }
 
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard let (action, id) = Self.parse(actionIdentifier: response.actionIdentifier,
+                                            userInfo: response.notification.request.content.userInfo) else { return }
+        let note = (response as? UNTextInputNotificationResponse)?.userText
+        // Finish the work before returning: the system may suspend the app as soon as this does.
+        await onAction?(action, id, note)
+    }
+
+    /// Which button was tapped and on what. Plain taps (which just open the app) return nil.
+    nonisolated static func parse(actionIdentifier: String, userInfo: [AnyHashable: Any]) -> (Action, UUID)? {
+        guard let action = Action(rawValue: actionIdentifier),
+              let idString = userInfo[objectIDKey] as? String,
+              let id = UUID(uuidString: idString) else { return nil }
+        return (action, id)
+    }
+
+    // MARK: Actions
+
+    /// Buttons a parent can use straight from a notification, without opening the app.
+    enum Action: String, CaseIterable {
+        case approveChore = "approve-chore"
+        case sendBack = "send-back"
+        case approveReward = "approve-reward"
+        case denyReward = "deny-reward"
+    }
+
+    enum Category: String {
+        case choreReview = "chore-review"
+        case rewardRequest = "reward-request"
+    }
+
+    nonisolated static let objectIDKey = "objectID"
+
+    /// Every action needs the device unlocked, so a kid holding a parent's phone can't approve.
+    static var categories: Set<UNNotificationCategory> {
+        let locked: UNNotificationActionOptions = [.authenticationRequired]
+        return [
+            UNNotificationCategory(identifier: Category.choreReview.rawValue, actions: [
+                UNNotificationAction(identifier: Action.approveChore.rawValue, title: "Approve", options: locked),
+                UNTextInputNotificationAction(identifier: Action.sendBack.rawValue, title: "Send back", options: locked,
+                                              textInputButtonTitle: "Send", textInputPlaceholder: "What needs another look?"),
+            ], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Category.rewardRequest.rawValue, actions: [
+                UNNotificationAction(identifier: Action.approveReward.rawValue, title: "Approve", options: locked),
+                UNNotificationAction(identifier: Action.denyReward.rawValue, title: "Deny", options: locked.union(.destructive)),
+            ], intentIdentifiers: []),
+        ]
+    }
+
+    /// Carries out a notification button through the same rules as the app's own buttons.
+    static func perform(_ action: Action, on id: UUID, note: String?, household: Household, me: Member,
+                        service: HouseholdService) throws {
+        switch action {
+        case .approveChore, .sendBack:
+            guard let chore = ((household.chores as? Set<Chore>) ?? []).first(where: { $0.id == id }) else {
+                throw ServiceError.invalid("That chore is gone.")
+            }
+            if action == .approveChore {
+                try service.approve(chore, by: me)
+            } else {
+                try service.reject(chore, by: me, note: note ?? "")
+            }
+        case .approveReward, .denyReward:
+            guard let request = ((household.redemptions as? Set<Redemption>) ?? []).first(where: { $0.id == id }) else {
+                throw ServiceError.invalid("That request is gone.")
+            }
+            try service.decide(request, approve: action == .approveReward, by: me)
+        }
+    }
+
+    /// Carries out the button, and tells the parent if it couldn't be done (say, the other parent got there first).
+    func handle(_ action: Action, on id: UUID, note: String?, household: Household, me: Member, service: HouseholdService) {
+        do {
+            try Self.perform(action, on: id, note: note, household: household, me: me, service: service)
+        } catch {
+            reportFailure(error.localizedDescription)
+        }
+    }
+
+    private func reportFailure(_ message: String) {
+        let failure = Event(key: "failed-\(UUID().uuidString)", title: "Couldn't do that", body: message)
+        center.add(UNNotificationRequest(identifier: failure.key, content: failure.content, trigger: nil))
+    }
+
     struct Event: Equatable {
         let key: String
         let title: String
         let body: String
+        var category: Category?
+        var objectID: UUID?
+
+        /// The banner, with its buttons when it has any.
+        var content: UNMutableNotificationContent {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            if let category, let objectID {
+                content.categoryIdentifier = category.rawValue
+                content.userInfo = [Notifier.objectIDKey: objectID.uuidString]
+            }
+            return content
+        }
     }
 
     func sync(household: Household, me: Member) {
@@ -53,13 +159,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                 result.append(Event(
                     key: "review-\(chore.id?.uuidString ?? "")-\(when)",
                     title: "\(chore.assignee?.displayName ?? "Someone") finished a chore",
-                    body: "\(chore.displayTitle) is ready for you to check."))
+                    body: "\(chore.displayTitle) is ready for you to check. Worth \(chore.points) points.",
+                    category: .choreReview, objectID: chore.id))
             }
             for request in redemptions where request.status == .requested {
                 result.append(Event(
                     key: "redeem-\(request.id?.uuidString ?? "")",
                     title: "\(request.member?.displayName ?? "Someone") wants a reward",
-                    body: "\(request.displayEmoji) \(request.displayTitle) · \(request.cost) pts"))
+                    body: "\(request.displayEmoji) \(request.displayTitle) · \(request.cost) pts",
+                    category: .rewardRequest, objectID: request.id))
             }
         } else {
             for chore in chores where chore.assignee?.id == me.id {
@@ -107,11 +215,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let isFirstRun = defaults.stringArray(forKey: seenKey) == nil
 
         for event in Notifier.eventsToDeliver(current: current, seen: seen, isFirstRun: isFirstRun) {
-            let content = UNMutableNotificationContent()
-            content.title = event.title
-            content.body = event.body
-            content.sound = .default
-            center.add(UNNotificationRequest(identifier: event.key, content: content, trigger: nil))
+            center.add(UNNotificationRequest(identifier: event.key, content: event.content, trigger: nil))
         }
         seen.formUnion(current.map(\.key))
         defaults.set(Array(seen), forKey: seenKey)
@@ -153,10 +257,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let existing = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix("due-") }
         center.removePendingNotificationRequests(withIdentifiers: existing)
         for reminder in Notifier.dueReminders(household: household, me: me) {
-            let content = UNMutableNotificationContent()
-            content.title = reminder.title
-            content.body = reminder.body
-            content.sound = .default
+            let content = Event(key: reminder.id, title: reminder.title, body: reminder.body).content
             let trigger = UNCalendarNotificationTrigger(dateMatching: reminder.fireAt, repeats: false)
             try? await center.add(UNNotificationRequest(identifier: reminder.id, content: content, trigger: trigger))
         }

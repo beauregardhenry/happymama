@@ -28,6 +28,7 @@ final class AppEnvironment {
     func start() {
         guard !started else { return }
         started = true
+        notifier.onAction = { [weak self] action, id, note in await self?.perform(action, on: id, note: note) }
         notifier.start()
         identity.start()
         changeObserver = NotificationCenter.default
@@ -36,14 +37,29 @@ final class AppEnvironment {
             .sink { [weak self] _ in self?.syncNotifications() }
     }
 
-    func syncNotifications() {
-        guard let userID = identity.userID else { return }
+    /// The household on this device and the account owner's profile in it.
+    private func currentHousehold() -> (Household, Member)? {
+        guard let userID = identity.userID else { return nil }
         let request = Household.fetchRequest()
         request.fetchLimit = 1
         guard let household = (try? persistence.viewContext.fetch(request))?.first as? Household,
-              let me = household.memberList.first(where: { $0.appleUserID == userID }) else { return }
+              let me = household.memberList.first(where: { $0.appleUserID == userID }) else { return nil }
+        return (household, me)
+    }
+
+    func syncNotifications() {
+        guard let (household, me) = currentHousehold() else { return }
         // Tidy up anything two devices both created while offline before notifying about it.
         try? service.resolveSyncDuplicates(in: household)
+        notifier.sync(household: household, me: me)
+    }
+
+    /// A parent tapped Approve, Send back or Deny on a notification.
+    private func perform(_ action: Notifier.Action, on id: UUID, note: String?) async {
+        // A tap can launch the app in the background before the iCloud identity has loaded.
+        if identity.userID == nil { await identity.refresh() }
+        guard let (household, me) = currentHousehold() else { return }
+        notifier.handle(action, on: id, note: note, household: household, me: me, service: service)
         notifier.sync(household: household, me: me)
     }
 }
