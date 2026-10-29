@@ -280,7 +280,10 @@ final class DemoDataTests: XCTestCase {
         XCTAssertEqual(household.kids.count, 3)
         let statuses = Set(((household.chores as? Set<Chore>) ?? []).map(\.status))
         XCTAssertTrue(statuses.isSuperset(of: [.todo, .pendingReview, .approved]))
-        XCTAssertEqual(household.kids.first { $0.displayName == "Ava" }?.balance, 4)
+        let ava = try XCTUnwrap(household.kids.first { $0.displayName == "Ava" })
+        XCTAssertEqual(ava.balance, 10)
+        XCTAssertEqual(ava.streak(calendar: service.calendar), 3)
+        XCTAssertEqual(ava.goal?.displayTitle, "Movie night pick")
         XCTAssertEqual(((household.rewards as? Set<Reward>) ?? []).count, 3)
     }
 }

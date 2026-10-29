@@ -37,7 +37,7 @@ struct RewardsView: View {
                     .listRowInsets(EdgeInsets())
             }
 
-            Section(me.isParent ? "Reward store" : "Spend your points") {
+            Section {
                 ForEach(visibleRewards) { reward in
                     if me.isParent {
                         Button { editing = reward } label: { rewardLabel(reward) }
@@ -52,11 +52,24 @@ struct RewardsView: View {
                     } else {
                         HStack {
                             rewardLabel(reward)
+                            let isGoal = me.goal?.id == reward.id
+                            Button { setGoal(isGoal ? nil : reward) } label: {
+                                Image(systemName: isGoal ? "star.fill" : "star")
+                                    .foregroundStyle(isGoal ? Color.orange : Color.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(isGoal ? "Stop saving for this" : "Save for this")
                             Button("Redeem") { confirming = reward }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(me.available < Int(reward.cost))
                         }
                     }
+                }
+            } header: {
+                Text(me.isParent ? "Reward store" : "Spend your points")
+            } footer: {
+                if !me.isParent && !visibleRewards.isEmpty {
+                    Text("Tap the star on a reward to save for it.")
                 }
             }
 
@@ -127,6 +140,10 @@ struct RewardsView: View {
 
     private func delete(_ reward: Reward) {
         do { try service.deleteReward(reward, by: me) } catch { self.error = error.localizedDescription }
+    }
+
+    private func setGoal(_ reward: Reward?) {
+        do { try service.setGoal(reward, for: me, by: me) } catch { self.error = error.localizedDescription }
     }
 }
 

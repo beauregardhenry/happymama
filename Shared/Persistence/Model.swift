@@ -20,6 +20,7 @@ enum HappyMamaModel {
             attr("colorIndex", .integer16AttributeType, 0),
             attr("appleUserID", .stringAttributeType),
             attr("createdAt", .dateAttributeType),
+            attr("goalRewardID", .UUIDAttributeType),
         ])
         let chore = entity(Chore.self, [
             attr("id", .UUIDAttributeType),
