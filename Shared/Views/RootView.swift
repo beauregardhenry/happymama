@@ -22,7 +22,11 @@ struct RootView: View {
             content
                 // A shared device goes back to the picker whenever it leaves the screen.
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .background { sharedDevice.signOut() }
+                    if phase == .background {
+                        sharedDevice.signOut()
+                        // Leave the widget current, including on first launch before anything has changed.
+                        AppEnvironment.shared.syncNotifications()
+                    }
                 }
         }
     }
