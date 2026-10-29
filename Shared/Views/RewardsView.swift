@@ -128,12 +128,14 @@ struct RewardsView: View {
     private func rewardLabel(_ reward: Reward) -> some View {
         HStack(spacing: 12) {
             Text(reward.displayEmoji).font(.title2)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(reward.displayTitle).font(.headline)
                 if !reward.isActive { Text("Hidden from kids").font(.caption).foregroundStyle(.secondary) }
+                // Kids' rows also hold the star and Redeem, so the cost moves under the name.
+                if !me.isParent { PointsBadge(points: Int(reward.cost)) }
             }
             Spacer()
-            PointsBadge(points: Int(reward.cost))
+            if me.isParent { PointsBadge(points: Int(reward.cost)) }
         }
         .contentShape(Rectangle())
     }
