@@ -42,6 +42,13 @@ extension HouseholdService {
         try markComplete(sentBack[0], by: ben, note: "All done", photo: nil)
         try reject(sentBack[0], by: mama, note: "There's still a sock under the bed.")
 
+        // A small habit Ben's parents trust him with: points the moment he says it's done.
+        var teeth = ChoreDraft(title: "Brush your teeth", points: 1, dueDate: today)
+        teeth.recurrence.kind = .daily
+        teeth.autoApprove = true
+        let brushed = try createChores(teeth, assignees: [ben], in: household, by: mama)
+        try markComplete(brushed[0], by: ben, note: nil, photo: nil)
+
         try createChores(ChoreDraft(title: "Water the plants", points: 6, dueDate: day(-2)), assignees: [ben], in: household, by: mama)
         try createChores(ChoreDraft(title: "Set the table", notes: "Plates, forks and napkins.", points: 5), assignees: [household.kids[0]], in: household, by: mama)
 

@@ -42,8 +42,9 @@ struct ChoreDetailView: View {
                 Section("Approved") {
                     Label("\(chore.awardedPoints) points awarded", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
-                    if let name = chore.reviewedByName, let date = chore.reviewedAt {
-                        Text("\(name) · \(date.formatted(date: .abbreviated, time: .shortened))")
+                    if let date = chore.reviewedAt {
+                        // No reviewer means the chore approves itself.
+                        Text("\(chore.reviewedByName ?? "Automatically") · \(date.formatted(date: .abbreviated, time: .shortened))")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
@@ -114,6 +115,9 @@ struct ChoreDetailView: View {
             if chore.recurrence.isRepeating {
                 LabeledContent("Repeats", value: chore.recurrence.summary())
             }
+            if chore.autoApprove {
+                LabeledContent("Approval", value: "Automatic")
+            }
             if chore.takesTurns {
                 LabeledContent("Taking turns", value: chore.rotation.map(\.displayName).joined(separator: " → "))
                 if chore.status != .approved, let next = chore.nextAssignee {
@@ -148,7 +152,9 @@ struct ChoreDetailView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             } footer: {
-                Text("A parent will check it before you get your points.")
+                Text(chore.autoApprove
+                     ? "You'll get your points right away."
+                     : "A parent will check it before you get your points.")
             }
         }
 

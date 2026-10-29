@@ -166,6 +166,8 @@ final class HouseholdService: ObservableObject {
         var recurrence = RecurrenceRule()
         /// One chore that moves to the next kid each time it repeats, instead of a copy each.
         var takeTurns = false
+        /// Award the points as soon as the kid marks it done, without a parent checking.
+        var autoApprove = false
     }
 
     /// Gives each kid their own copy, or with `takeTurns` one chore the kids take turns on,
@@ -205,6 +207,7 @@ final class HouseholdService: ObservableObject {
         chore.points = Int32(max(0, draft.points))
         chore.dueDate = draft.dueDate.map { calendar.startOfDay(for: $0) }
         chore.dueTime = draft.dueDate == nil ? nil : draft.dueTime
+        chore.autoApprove = draft.autoApprove
         chore.recurrence = draft.recurrence
         chore.rotationIDs = draft.takeTurns ? assignees.compactMap(\.id) : []
         let assignee = assignees.first { $0.id == chore.assignee?.id } ?? first
@@ -232,6 +235,8 @@ final class HouseholdService: ObservableObject {
         chore.completionNote = note?.trimmed.nilIfEmpty
         chore.photo = photo
         chore.reviewNote = nil
+        // Parents can trust small habits to count right away.
+        if chore.autoApprove { try award(chore, points: Int(chore.points), reviewer: nil) }
         try save()
     }
 
@@ -246,25 +251,30 @@ final class HouseholdService: ObservableObject {
         try save()
     }
 
-    /// A parent confirms the chore. This is the only place chore points are awarded.
-    /// `points` overrides the chore's value (partial or bonus credit).
+    /// A parent confirms the chore. This and auto-approved chores are the only ways
+    /// chore points are awarded. `points` overrides the chore's value (partial or bonus credit).
     func approve(_ chore: Chore, by me: Member, points: Int? = nil) throws {
         try requireParent(me)
         guard chore.status == .pendingReview else { throw ServiceError.invalid("This chore isn't waiting for approval.") }
-        guard let kid = chore.assignee, let household = chore.household else { throw ServiceError.invalid("This chore has no owner.") }
+        try award(chore, points: points ?? Int(chore.points), reviewer: me.name)
+        try save()
+    }
 
-        let awarded = max(0, points ?? Int(chore.points))
+    /// Marks the chore approved, records its points, and schedules a repeating chore's
+    /// next copy. A nil reviewer means it was approved automatically.
+    private func award(_ chore: Chore, points: Int, reviewer: String?) throws {
+        guard let kid = chore.assignee, let household = chore.household else { throw ServiceError.invalid("This chore has no owner.") }
+        let awarded = max(0, points)
         chore.status = .approved
         chore.awardedPoints = Int32(awarded)
         chore.reviewedAt = Date()
-        chore.reviewedByName = me.name
+        chore.reviewedByName = reviewer
         chore.reviewNote = nil
 
         let entry = try addEntry(Int32(awarded), kind: .chore, reason: chore.displayTitle, to: kid, in: household)
         entry.choreID = chore.id
 
         try scheduleNextOccurrence(after: chore)
-        try save()
     }
 
     /// A parent sends the chore back to the kid with a note. No points are awarded.
@@ -305,6 +315,7 @@ final class HouseholdService: ObservableObject {
         chore.status = .todo
         chore.dueDate = draft.dueDate.map { calendar.startOfDay(for: $0) }
         chore.dueTime = draft.dueDate == nil ? nil : draft.dueTime
+        chore.autoApprove = draft.autoApprove
         chore.createdAt = Date()
         chore.recurrence = draft.recurrence
         chore.household = household
@@ -325,6 +336,7 @@ final class HouseholdService: ObservableObject {
         draft.points = Int(chore.points)
         draft.dueDate = next
         draft.dueTime = chore.dueTime
+        draft.autoApprove = chore.autoApprove
         draft.recurrence = rule
         let copy = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
         copy.sourceChoreID = chore.id
