@@ -142,8 +142,28 @@ final class Chore: NSManagedObject, Identifiable {
     @NSManaged var awardedPoints: Int32
     /// For a repeating chore's next copy: the chore whose approval created it.
     @NSManaged var sourceChoreID: UUID?
+    /// For a chore kids take turns on: the member ids in turn order, comma-separated.
+    @NSManaged var rotationRaw: String?
     @NSManaged var household: Household?
     @NSManaged var assignee: Member?
+
+    var rotationIDs: [UUID] {
+        get { (rotationRaw ?? "").split(separator: ",").compactMap { UUID(uuidString: String($0)) } }
+        set { rotationRaw = newValue.isEmpty ? nil : newValue.map(\.uuidString).joined(separator: ",") }
+    }
+    /// The kids taking turns who are still in the household, in turn order.
+    var rotation: [Member] {
+        let kids = household?.kids ?? []
+        return rotationIDs.compactMap { id in kids.first { $0.id == id } }
+    }
+    var takesTurns: Bool { rotationIDs.count > 1 }
+    /// Who the next copy goes to: the next kid in the rotation, or the same kid if there's no one else.
+    var nextAssignee: Member? {
+        let kids = rotation
+        guard kids.count > 1 else { return kids.first ?? assignee }
+        guard let assignee, let index = kids.firstIndex(of: assignee) else { return kids.first }
+        return kids[(index + 1) % kids.count]
+    }
 
     var displayTitle: String { title ?? "Chore" }
     var status: ChoreStatus {

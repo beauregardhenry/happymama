@@ -87,6 +87,14 @@ final class HouseholdService: ObservableObject {
         if member.isParent, (member.household?.parents.count ?? 0) <= 1 {
             throw ServiceError.invalid("A household needs at least one parent.")
         }
+        // A chore kids take turns on passes to whoever is next instead of leaving with this kid.
+        for chore in (member.assignedChores as? Set<Chore>) ?? [] where chore.takesTurns && chore.status == .todo {
+            guard let next = chore.nextAssignee, next != member else { continue }
+            chore.assignee = next
+        }
+        for chore in (member.household?.chores as? Set<Chore>) ?? [] where chore.rotationIDs.contains(where: { $0 == member.id }) {
+            chore.rotationIDs.removeAll { $0 == member.id }
+        }
         context.delete(member)
         try save()
     }
@@ -154,13 +162,23 @@ final class HouseholdService: ObservableObject {
         var points = 10
         var dueDate: Date?
         var recurrence = RecurrenceRule()
+        /// One chore that moves to the next kid each time it repeats, instead of a copy each.
+        var takeTurns = false
     }
 
+    /// Gives each kid their own copy, or with `takeTurns` one chore the kids take turns on,
+    /// starting with the first of `assignees`.
     @discardableResult
     func createChores(_ draft: ChoreDraft, assignees: [Member], in household: Household, by me: Member) throws -> [Chore] {
         try requireParent(me)
-        guard !assignees.isEmpty else { throw ServiceError.invalid("Choose who should do it.") }
+        guard let first = assignees.first else { throw ServiceError.invalid("Choose who should do it.") }
         let title = try validated(draft, assignees: assignees)
+        if draft.takeTurns {
+            let chore = try newChore(from: draft, title: title, assignee: first, household: household)
+            chore.rotationIDs = assignees.compactMap(\.id)
+            try save()
+            return [chore]
+        }
         let created = try assignees.map { kid in
             try newChore(from: draft, title: title, assignee: kid, household: household)
         }
@@ -169,14 +187,24 @@ final class HouseholdService: ObservableObject {
     }
 
     func updateChore(_ chore: Chore, with draft: ChoreDraft, assignee: Member, by me: Member) throws {
+        try updateChore(chore, with: draft, assignees: [assignee], by: me)
+    }
+
+    /// `assignees` is the one kid doing it, or with `takeTurns` everyone taking turns. The kid
+    /// whose turn it is keeps it if they're still in the rotation.
+    func updateChore(_ chore: Chore, with draft: ChoreDraft, assignees: [Member], by me: Member) throws {
         try requireParent(me)
         guard chore.status == .todo else { throw ServiceError.invalid("Only chores that haven't been turned in can be edited.") }
-        let title = try validated(draft, assignees: [assignee])
+        guard let first = assignees.first else { throw ServiceError.invalid("Choose who should do it.") }
+        guard draft.takeTurns || assignees.count == 1 else { throw ServiceError.invalid("Choose one person, or let them take turns.") }
+        let title = try validated(draft, assignees: assignees)
         chore.title = title
         chore.notes = draft.notes.trimmed
         chore.points = Int32(max(0, draft.points))
         chore.dueDate = draft.dueDate.map { calendar.startOfDay(for: $0) }
         chore.recurrence = draft.recurrence
+        chore.rotationIDs = draft.takeTurns ? assignees.compactMap(\.id) : []
+        let assignee = assignees.first { $0.id == chore.assignee?.id } ?? first
         if chore.assignee?.id != assignee.id {
             chore.assignee = assignee
             chore.reviewNote = nil
@@ -258,6 +286,10 @@ final class HouseholdService: ObservableObject {
         if draft.recurrence.isRepeating, draft.dueDate == nil {
             throw ServiceError.invalid("Repeating chores need a due date to start from.")
         }
+        if draft.takeTurns {
+            guard assignees.count > 1 else { throw ServiceError.invalid("Choose at least two kids to take turns.") }
+            guard draft.recurrence.isRepeating else { throw ServiceError.invalid("Taking turns needs a chore that repeats.") }
+        }
         return title
     }
 
@@ -276,10 +308,11 @@ final class HouseholdService: ObservableObject {
         return chore
     }
 
-    /// Repeating chores get their next copy once the current one is approved.
+    /// Repeating chores get their next copy once the current one is approved; if kids
+    /// take turns, it goes to whoever is next.
     private func scheduleNextOccurrence(after chore: Chore) throws {
         let rule = chore.recurrence
-        guard rule.isRepeating, let household = chore.household, let kid = chore.assignee else { return }
+        guard rule.isRepeating, let household = chore.household, let kid = chore.nextAssignee else { return }
         // Late chores repeat from today, not from the missed date.
         let base = max(chore.dueDate ?? Date(), calendar.startOfDay(for: Date()))
         guard let next = rule.nextDate(after: base, calendar: calendar) else { return }
@@ -290,6 +323,7 @@ final class HouseholdService: ObservableObject {
         draft.recurrence = rule
         let copy = try newChore(from: draft, title: chore.displayTitle, assignee: kid, household: household)
         copy.sourceChoreID = chore.id
+        copy.rotationIDs = chore.rotationIDs
     }
 
     // MARK: Sync duplicates
