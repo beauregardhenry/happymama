@@ -104,8 +104,16 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Tells the parent when a notification button couldn't be carried out (say, the other parent got there first).
-    func reportFailure(_ message: String) {
+    /// Carries out the button, and tells the parent if it couldn't be done (say, the other parent got there first).
+    func handle(_ action: Action, on id: UUID, note: String?, household: Household, me: Member, service: HouseholdService) {
+        do {
+            try Self.perform(action, on: id, note: note, household: household, me: me, service: service)
+        } catch {
+            reportFailure(error.localizedDescription)
+        }
+    }
+
+    private func reportFailure(_ message: String) {
         let failure = Event(key: "failed-\(UUID().uuidString)", title: "Couldn't do that", body: message)
         center.add(UNNotificationRequest(identifier: failure.key, content: failure.content, trigger: nil))
     }

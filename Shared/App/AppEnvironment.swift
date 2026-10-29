@@ -59,11 +59,7 @@ final class AppEnvironment {
         // A tap can launch the app in the background before the iCloud identity has loaded.
         if identity.userID == nil { await identity.refresh() }
         guard let (household, me) = currentHousehold() else { return }
-        do {
-            try Notifier.perform(action, on: id, note: note, household: household, me: me, service: service)
-        } catch {
-            notifier.reportFailure(error.localizedDescription)
-        }
+        notifier.handle(action, on: id, note: note, household: household, me: me, service: service)
         notifier.sync(household: household, me: me)
     }
 }

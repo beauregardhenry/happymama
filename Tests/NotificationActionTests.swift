@@ -117,6 +117,18 @@ final class NotificationActionTests: ServiceTestCase {
         XCTAssertEqual(ServiceError.notAllowed("Nope").localizedDescription, "Nope")
     }
 
+    func testHandleCarriesOutTheButtonAndSurvivesFailures() throws {
+        let chore = try turnedIn(points: 4)
+        let notifier = Notifier()
+        let id = try XCTUnwrap(chore.id)
+        notifier.handle(.approveChore, on: id, note: nil, household: household, me: parent, service: service)
+        XCTAssertEqual(kid.balance, 4)
+
+        // The second tap fails; it's reported as a banner instead of thrown.
+        notifier.handle(.approveChore, on: id, note: nil, household: household, me: parent, service: service)
+        XCTAssertEqual(kid.balance, 4)
+    }
+
     func testApprovingARewardTheKidCanNoLongerAffordFails() throws {
         let request = try requested(cost: 5)
         // The other parent's device removed the points this request was counting on.
