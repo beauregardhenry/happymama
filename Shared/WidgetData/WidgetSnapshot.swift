@@ -3,6 +3,10 @@ import Foundation
 /// What the home-screen widget shows, written by the app into the shared app group
 /// container. The widget can't open the Core Data store, so it reads this instead.
 /// Compiled into both the app and the widget extension, so it uses Foundation only.
+private extension String {
+    var nilIfBlank: String? { isEmpty ? nil : self }
+}
+
 struct WidgetSnapshot: Codable, Equatable {
     struct ChoreItem: Codable, Equatable {
         var title: String
@@ -35,7 +39,12 @@ struct WidgetSnapshot: Codable, Equatable {
     var kids: [Kid]
     var waitingForReview: Int
 
-    static let appGroup = "group.com.happymama.HappyMama"
+    /// iOS uses the group as written. On the Mac the group carries the team prefix, which the
+    /// build fills into Info.plist (with no team set, both come out the same).
+    static var appGroup: String {
+        (Bundle.main.object(forInfoDictionaryKey: "HappyMamaAppGroup") as? String)?.nilIfBlank
+            ?? "group.com.happymama.HappyMama"
+    }
     static let kind = "Today"
 
     static var fileURL: URL? {

@@ -24,6 +24,8 @@
 	<true/>
 	<key>CloudKitContainerID</key>
 	<string>iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>HappyMamaAppGroup</key>
+	<string>$(TeamIdentifierPrefix)group.com.happymama.HappyMama</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>

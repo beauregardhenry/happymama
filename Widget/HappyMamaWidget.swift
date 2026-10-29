@@ -42,7 +42,16 @@ struct TodayWidget: Widget {
         }
         .configurationDisplayName("Today")
         .description("Today's chores and points, or what's waiting for a parent to review.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular])
+        .supportedFamilies(families)
+    }
+
+    private var families: [WidgetFamily] {
+        #if os(iOS)
+        [.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular]
+        #else
+        // The Mac has no Lock Screen sizes.
+        [.systemSmall, .systemMedium]
+        #endif
     }
 }
 

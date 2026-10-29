@@ -70,6 +70,11 @@ final class WidgetSnapshotTests: ServiceTestCase {
         XCTAssertEqual(try XCTUnwrap(kidSnap.goalProgress), 0.5, accuracy: 0.001)
     }
 
+    func testAppGroupComesFromInfoPlist() {
+        // The test host is the Mac app built with no team, so the prefix is empty.
+        XCTAssertEqual(WidgetSnapshot.appGroup, "group.com.happymama.HappyMama")
+    }
+
     func testSaveRoundTripsAndSkipsUnchangedWrites() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("widget-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
