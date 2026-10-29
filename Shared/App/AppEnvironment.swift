@@ -52,6 +52,7 @@ final class AppEnvironment {
         // Tidy up anything two devices both created while offline before notifying about it.
         try? service.resolveSyncDuplicates(in: household)
         notifier.sync(household: household, me: me)
+        WidgetSnapshot.publish(household: household, me: me)
     }
 
     /// A parent tapped Approve, Send back or Deny on a notification.

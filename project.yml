@@ -32,6 +32,8 @@ targets:
     type: application
     platform: iOS
     sources: [Shared]
+    dependencies:
+      - target: HappyMamaWidget
     settings:
       base:
         PRODUCT_NAME: HappyMama
@@ -70,6 +72,40 @@ targets:
         com.apple.developer.icloud-container-identifiers:
           - iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
         com.apple.developer.icloud-services: [CloudKit]
+        com.apple.security.application-groups: [group.com.happymama.HappyMama]
+
+  # Home-screen and Lock Screen widget. It reads a snapshot the app writes to the
+  # shared app group container, since it can't open the Core Data store itself.
+  HappyMamaWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widget
+      - Shared/WidgetData
+    settings:
+      base:
+        PRODUCT_NAME: HappyMamaWidget
+        PRODUCT_MODULE_NAME: HappyMamaWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.happymama.HappyMama.Widget
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/Widget-Info.plist
+        # Colors the widget gallery's Add Widget button; the widget itself uses Color.happy.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SKIP_INSTALL: YES
+      configs:
+        Local:
+          CODE_SIGN_ENTITLEMENTS: ""
+    info:
+      path: Config/Widget-Info.plist
+      properties:
+        CFBundleDisplayName: Happy Mama
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Config/Widget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.happymama.HappyMama]
 
   HappyMama-macOS:
     type: application
